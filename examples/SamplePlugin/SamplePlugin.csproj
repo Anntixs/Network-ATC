@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Example plugin. Build it and copy SamplePlugin.dll into %APPDATA%\Network-ATC\plugins. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Private=false: the application provides the API assembly at run time. -->
+    <ProjectReference Include="..\..\src\NetworkAtc.PluginApi\NetworkAtc.PluginApi.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>

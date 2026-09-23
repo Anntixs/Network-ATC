@@ -1,0 +1,63 @@
+name: Release
+
+# Builds a ready-to-run Network-ATC for Windows x64 (self-contained, no .NET install needed).
+#  - Every push to main, pull request and manual run: the package is attached to the run as an artifact.
+#  - Tags v*: the zip is also published as a GitHub Release.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test tests/NetworkAtc.Core.Tests -c Release
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            $v = '${{ github.ref_name }}'.TrimStart('v'); $name = "Network-ATC-$v-win-x64"
+          } else {
+            $v = '0.1.0'; $name = "Network-ATC-$v-build${{ github.run_number }}-win-x64"
+          }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "name=$name" >> $env:GITHUB_OUTPUT
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/NetworkAtc.App -c Release -r win-x64 --self-contained true `
+            -p:Version=${{ steps.version.outputs.version }} -o publish/Network-ATC
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build examples/SamplePlugin -c Release
+          New-Item -ItemType Directory -Force publish/Network-ATC/plugin-examples | Out-Null
+          Copy-Item examples/SamplePlugin/bin/Release/net8.0/SamplePlugin.dll publish/Network-ATC/plugin-examples/
+          Copy-Item src/NetworkAtc.PluginApi/bin/Release/net8.0/NetworkAtc.PluginApi.xml publish/Network-ATC/ -ErrorAction SilentlyContinue
+          if (-not (Test-Path publish/Network-ATC/Network-ATC.exe)) { throw "Network-ATC.exe missing" }
+          Compress-Archive -Path publish/Network-ATC -DestinationPath "${{ steps.version.outputs.name }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.name }}
+          path: publish/Network-ATC
+
+      - name: GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.version.outputs.name }}.zip
+          generate_release_notes: true
