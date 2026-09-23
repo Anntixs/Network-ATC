@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using NetworkAtc.Core.Fsd;
+using NetworkAtc.Core.Tags;
 
 namespace NetworkAtc.Core.Customization;
 
@@ -9,9 +10,9 @@ public sealed class TagLayouts
     /// <summary>Aircraft nobody works.</summary>
     public string Untracked { get; set; } = "{callsign}\n{fl}{vs}";
     /// <summary>Aircraft the controller works.</summary>
-    public string Tracked { get; set; } = "{callsign} {wtc}\n{fl}{vs} {cfl}\n{gs10} {dest} {ahdg} {aspd}";
+    public string Tracked { get; set; } = "{callsign} {wtc}\n{fl}{vs} {cfl|---}\n{gs10} {dest} {ahdg} {aspd}";
     /// <summary>Selected or hovered aircraft.</summary>
-    public string Detailed { get; set; } = "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|---} {rfl}\n{gs} {hdg} {dep}-{dest}\n{scratch}";
+    public string Detailed { get; set; } = "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{scratch|+ заметка}";
     public double FontSize { get; set; } = 11;
     public string FontFamily { get; set; } = "Cascadia Mono, Consolas";
     public bool ShowTagLeader { get; set; } = true;
@@ -104,6 +105,40 @@ public sealed class Profile
         [".ctc"] = "contact $1 on $2, good day",
     };
 
+    /// <summary>Tag field → what left and right clicks on it do (see <see cref="TagActions"/>).</summary>
+    public Dictionary<string, TagClickBinding> TagClicks { get; set; } = DefaultTagClicks();
+
+    public static Dictionary<string, TagClickBinding> DefaultTagClicks() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["callsign"] = new(TagActions.ToggleTrack, TagActions.AircraftMenu),
+        ["fl"] = new(TagActions.ClearedLevel, TagActions.ClearedLevel),
+        ["alt"] = new(TagActions.ClearedLevel, TagActions.ClearedLevel),
+        ["cfl"] = new(TagActions.ClearedLevel, TagActions.ClearedLevel),
+        ["hdg"] = new(TagActions.Heading, TagActions.Heading),
+        ["ahdg"] = new(TagActions.Heading, TagActions.Heading),
+        ["gs"] = new(TagActions.Speed, TagActions.Speed),
+        ["gs10"] = new(TagActions.Speed, TagActions.Speed),
+        ["aspd"] = new(TagActions.Speed, TagActions.Speed),
+        ["squawk"] = new(TagActions.Squawk, TagActions.Squawk),
+        ["asq"] = new(TagActions.Squawk, TagActions.Squawk),
+        ["scratch"] = new(TagActions.Scratchpad, TagActions.Scratchpad),
+        ["type"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
+        ["dep"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
+        ["dest"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
+        ["rfl"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
+    };
+
+    /// <summary>
+    /// Action for a click on a tag field. Fields without a binding: plugin fields with a click handler
+    /// run it, everything else selects the aircraft (left) or opens its menu (right).
+    /// </summary>
+    public string ResolveTagClick(string? field, bool right, bool pluginHandles)
+    {
+        if (field != null && TagClicks.TryGetValue(field, out var b)) return right ? b.Right : b.Left;
+        if (field != null && pluginHandles) return TagActions.Plugin;
+        return right ? TagActions.AircraftMenu : TagActions.Select;
+    }
+
     /// <summary>Action → key gesture ("Ctrl+F", "F5", "Add").</summary>
     public Dictionary<string, string> KeyBindings { get; set; } = new(DefaultKeyBindings, StringComparer.OrdinalIgnoreCase);
 
@@ -151,6 +186,8 @@ public sealed class Profile
                 // Keep new default key bindings / layers that older profile files don't have.
                 foreach (var (k, v) in DefaultKeyBindings) p.KeyBindings.TryAdd(k, v);
                 foreach (var (k, v) in new Profile().Layers) p.Layers.TryAdd(k, v);
+                p.TagClicks = new Dictionary<string, TagClickBinding>(p.TagClicks ?? [], StringComparer.OrdinalIgnoreCase);
+                foreach (var (k, v) in DefaultTagClicks()) p.TagClicks.TryAdd(k, v);
                 return p;
             }
         }

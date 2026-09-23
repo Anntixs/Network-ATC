@@ -4,7 +4,7 @@ namespace NetworkAtc.Plugins;
 public static class PluginApiVersion
 {
     public const int Major = 1;
-    public const int Minor = 0;
+    public const int Minor = 1;
 }
 
 /// <summary>
@@ -107,6 +107,12 @@ public interface IPluginHost
 
     /// <summary>A value that can be used in tag templates as {key}.</summary>
     void RegisterTagField(string key, string description, Func<IAircraft, string> value);
+
+    /// <summary>
+    /// Make a tag field clickable (API 1.1). The handler gets the aircraft and true for a right click.
+    /// Users can still rebind the field to another action in the settings.
+    /// </summary>
+    void RegisterTagFieldClick(string key, Action<IAircraft, bool> onClick);
 
     /// <summary>A command typed as ".name args". Return feedback text or null.</summary>
     void RegisterCommand(string name, string description, Func<IReadOnlyList<string>, string?> handler);

@@ -16,6 +16,8 @@ public sealed record RegisteredOverlay(IRadarOverlay Overlay, string Owner);
 public sealed class PluginRegistry
 {
     public ConcurrentDictionary<string, PluginCommand> Commands { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Tag field → click handler registered by a plugin (argument: right button).</summary>
+    public ConcurrentDictionary<string, (string Owner, Action<IAircraft, bool> Handler)> TagClicks { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<AircraftAction> AircraftActions { get; } = [];
     public List<RegisteredOverlay> Overlays { get; } = [];
     public event EventHandler<string>? Log;
@@ -66,6 +68,12 @@ public sealed class PluginHost : IPluginHost
     public void RegisterTagField(string key, string description, Func<IAircraft, string> value)
     {
         _fields.Add(key, $"{description} ({_owner})", value);
+        _registry.RaiseChanged();
+    }
+
+    public void RegisterTagFieldClick(string key, Action<IAircraft, bool> onClick)
+    {
+        _registry.TagClicks[key] = (_owner, onClick);
         _registry.RaiseChanged();
     }
 

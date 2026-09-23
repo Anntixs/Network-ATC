@@ -51,6 +51,7 @@ public sealed class HelloPlugin : IAtcPlugin
 | `Aircraft`, `SelectedAircraft` | трафик и выбранный борт (`IAircraft`: позиция, высота, скорость, курс, код, план полёта, указания диспетчера) |
 | `AircraftUpdated`, `AircraftRemoved`, `FlightPlanUpdated`, `MessageReceived`, `ConnectionChanged` | события |
 | `RegisterTagField(key, description, value)` | поле `{key}` для шаблонов тегов |
+| `RegisterTagFieldClick(key, (aircraft, right) => …)` | щелчок по полю тега (API 1.1); пользователь может переназначить действие в настройках |
 | `RegisterCommand(name, description, handler)` | команда `.name`, возвращает текст ответа |
 | `RegisterOverlay(IRadarOverlay)` | рисование поверх радара: `IRadarCanvas` — линии, полилинии, полигоны, круги, текст в географических координатах; оверлей включается в меню «Слои» |
 | `RegisterAircraftAction(title, action)` | пункт контекстного меню борта (правый клик) |

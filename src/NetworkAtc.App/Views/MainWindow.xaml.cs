@@ -20,6 +20,7 @@ using NetworkAtc.Core.Session;
 using NetworkAtc.Core.Tags;
 using NetworkAtc.Plugins;
 using Track = NetworkAtc.Core.Radar.Track;
+using TagClickEventArgs = NetworkAtc.App.Radar.TagClickEventArgs;
 
 namespace NetworkAtc.App.Views;
 
@@ -90,6 +91,7 @@ public partial class MainWindow : Window
         Radar.SelectionChanged += (_, t) => OnSelectionChanged(t);
         Radar.ViewChanged += (_, _) => UpdateViewInfo();
         Radar.TargetMenuRequested += (_, t) => ShowTargetMenu(t);
+        Radar.TagClicked += (_, e) => OnTagClicked(e);
 
         _session.TrackUpdated += (_, _) => _dirty = true;
         _session.TrackRemoved += (_, cs) => Dispatcher.BeginInvoke(() =>
@@ -322,6 +324,96 @@ public partial class MainWindow : Window
         TrafficList.Visibility = TrafficTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         PlanPanel.Visibility = PlanTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         AtcList.Visibility = AtcTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---- interactive tag ----------------------------------------------------------------------
+
+    private void OnTagClicked(TagClickEventArgs e)
+    {
+        var t = e.Track;
+        bool pluginHandles = e.Field != null && _registry.TagClicks.ContainsKey(e.Field);
+        string action = _profile.ResolveTagClick(e.Field, e.Right, pluginHandles);
+        if (action == TagActions.None) return;
+        Radar.Select(t);
+
+        switch (action)
+        {
+            case TagActions.ToggleTrack:
+                t.IsTracked = !t.IsTracked;
+                break;
+            case TagActions.AircraftMenu:
+                ShowTargetMenu(t);
+                break;
+            case TagActions.ClearedLevel:
+            {
+                var levels = TagMenus.Levels(t.Altitude, t.ClearedAltitude, _profile.TransitionAltitude);
+                var items = levels.Select(v => new EditorItem(_tagFields.FlightLevel(v), _tagFields.FlightLevel(v), v == t.ClearedAltitude)).ToList();
+                items.Add(new EditorItem("снять", ""));
+                int index = TagMenus.NearestIndex(levels, t.ClearedAltitude ?? t.Altitude);
+                TagEditor.Show(Radar, e.Position, $"CFL · {t.Callsign}", items, index, "", "350, F350 или A045",
+                    v => Annotate(t, $".cfl {v}"));
+                break;
+            }
+            case TagActions.Heading:
+            {
+                var headings = TagMenus.Headings(t.AssignedHeading ?? t.Heading);
+                var items = headings.Select(h => new EditorItem(h.ToString("000"), h.ToString(), h == t.AssignedHeading)).ToList();
+                items.Insert(0, new EditorItem("снять", ""));
+                TagEditor.Show(Radar, e.Position, $"Курс · {t.Callsign}", items, 1, "", "1–360",
+                    v => Annotate(t, $".hdg {v}"));
+                break;
+            }
+            case TagActions.Speed:
+            {
+                var speeds = TagMenus.Speeds();
+                var items = speeds.Select(v => new EditorItem(v.ToString(), v.ToString(), v == t.AssignedSpeed)).ToList();
+                items.Add(new EditorItem("снять", ""));
+                TagEditor.Show(Radar, e.Position, $"Скорость · {t.Callsign}", items,
+                    TagMenus.NearestIndex(speeds, t.AssignedSpeed ?? t.GroundSpeed), "", "узлы",
+                    v => Annotate(t, $".spd {v}"));
+                break;
+            }
+            case TagActions.Squawk:
+            {
+                var items = new List<EditorItem> { new("выдать свободный", "", true) };
+                TagEditor.Show(Radar, e.Position, $"Код · {t.Callsign}", items, -1,
+                    t.AssignedSquawk?.ToString("0000") ?? "", "4 цифры 0–7", v => Annotate(t, $".sq {v}"));
+                break;
+            }
+            case TagActions.Scratchpad:
+                TagEditor.Show(Radar, e.Position, $"Заметка · {t.Callsign}", [], -1, t.Scratchpad, "Enter — сохранить, пусто — удалить",
+                    v => Annotate(t, $".scratch {v}"));
+                break;
+            case TagActions.FlightPlan:
+                if (SideToggle.IsChecked != true)
+                {
+                    SideToggle.IsChecked = true;
+                    ApplyPanels();
+                }
+                PlanTab.IsChecked = true;
+                break;
+            case TagActions.PrivateMessage:
+                CommandLine.Text = $".msg {t.Callsign} ";
+                CommandLine.Focus();
+                CommandLine.CaretIndex = CommandLine.Text.Length;
+                break;
+            case TagActions.Plugin when e.Field != null && _registry.TagClicks.TryGetValue(e.Field, out var handler):
+                try { handler.Handler(t, e.Right); }
+                catch (Exception ex) { Error($"{handler.Owner}: {ex.Message}"); }
+                break;
+        }
+        _dirty = true;
+        ShowPlan(t);
+    }
+
+    /// <summary>Runs an annotation command for the aircraft and reports problems.</summary>
+    private async void Annotate(Track t, string command)
+    {
+        Radar.Select(t);
+        var feedback = await _commands.ExecuteAsync(command.TrimEnd());
+        if (feedback != null && !feedback.StartsWith(t.Callsign, StringComparison.Ordinal)) Error(feedback);
+        _dirty = true;
+        ShowPlan(t);
     }
 
     private void ShowTargetMenu(Track t)

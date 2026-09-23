@@ -35,6 +35,9 @@ public sealed class RadarView : FrameworkElement
     private Point _mouse;
     private readonly Dictionary<string, Vector> _tagOffsets = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Rect> _tagBounds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(Rect Bounds, string Callsign, string Field)> _fieldZones = [];
+    private (string Callsign, string Field)? _hoveredField;
+    private (string Callsign, string? Field, Point Start)? _pendingTagClick;
     private readonly Dictionary<string, Point> _targetPoints = new(StringComparer.OrdinalIgnoreCase);
     private Typeface _tagTypeface = new("Consolas");
     private readonly Dictionary<string, TagTemplate> _templates = [];
@@ -59,8 +62,10 @@ public sealed class RadarView : FrameworkElement
 
     public event EventHandler<Track?>? SelectionChanged;
     public event EventHandler? ViewChanged;
-    /// <summary>Right click on a target; the window builds the context menu.</summary>
+    /// <summary>Right click on a target symbol; the window builds the context menu.</summary>
     public event EventHandler<Track>? TargetMenuRequested;
+    /// <summary>Click on a tag (Field is null when the click was not on a field).</summary>
+    public event EventHandler<TagClickEventArgs>? TagClicked;
 
     public double NmPerPixel => _nmPerPixel;
     public GeoPoint ViewCenter => _projection.FromPlane(_cx, _cy);
@@ -272,6 +277,7 @@ public sealed class RadarView : FrameworkElement
     private void DrawTraffic(DrawingContext dc, Theme theme)
     {
         _tagBounds.Clear();
+        _fieldZones.Clear();
         _targetPoints.Clear();
         var conflicted = new HashSet<string>(Conflicts.SelectMany(c => new[] { c.A.Callsign, c.B.Callsign }), StringComparer.OrdinalIgnoreCase);
         var tracks = Tracks().Where(t => t.LastUpdate != default && PassesFilter(t)).ToList();
@@ -349,17 +355,23 @@ public sealed class RadarView : FrameworkElement
             if (_templates.Count > 20) _templates.Clear();
             _templates[layout] = template = TagTemplate.Parse(layout);
         }
-        var lines = template.Render(t, TagFields);
+        var lines = template.RenderSpans(t, TagFields);
         if (lines.Count == 0) return;
         string color = alert ? theme.Conflict
             : ReferenceEquals(t, Selected) ? theme.TagSelected
             : t.Highlight ?? (t.IsTracked ? theme.TagTextTracked : theme.TagText);
+        var brush = Paint.Brush(color);
+        double size = Profile.Tags.FontSize, lineHeight = size * 1.3;
 
-        var text = new FormattedText(string.Join('\n', lines), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            _tagTypeface, Profile.Tags.FontSize, Paint.Brush(color), dip) { LineHeight = Profile.Tags.FontSize * 1.25 };
+        // Measure every span so each field gets its own clickable rectangle.
+        var measured = lines.Select(line => line.Select(span => (Span: span,
+            Text: new FormattedText(span.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size, brush, dip))).ToList()).ToList();
+        double width = measured.Max(line => line.Sum(x => x.Text.WidthIncludingTrailingWhitespace));
+        double height = lineHeight * measured.Count;
+
         var offset = _tagOffsets.TryGetValue(t.Callsign, out var o) ? o : new Vector(Profile.Tags.DefaultOffsetX, Profile.Tags.DefaultOffsetY);
         var origin = target + offset;
-        var bounds = new Rect(origin.X - 3, origin.Y - 2, text.Width + 6, text.Height + 4);
+        var bounds = new Rect(origin.X - 4, origin.Y - 2, width + 8, height + 4);
         _tagBounds[t.Callsign] = bounds;
 
         if (Profile.Tags.ShowTagLeader)
@@ -376,7 +388,26 @@ public sealed class RadarView : FrameworkElement
         var bg = Paint.ToColor(theme.TagBackground);
         if (bg.A > 0 || detailed)
             dc.DrawRoundedRectangle(Paint.Brush(bg.A > 0 ? theme.TagBackground : Paint.WithAlpha(theme.Panel, 0xD8)), null, bounds, 3, 3);
-        dc.DrawText(text, origin);
+
+        double y = origin.Y;
+        foreach (var line in measured)
+        {
+            double x = origin.X;
+            foreach (var (span, text) in line)
+            {
+                double w = text.WidthIncludingTrailingWhitespace;
+                if (span.Field != null && span.Text.Trim().Length > 0)
+                {
+                    var zone = new Rect(x - 1, y, w + 2, lineHeight);
+                    _fieldZones.Add((zone, t.Callsign, span.Field));
+                    if (_hoveredField is { } h && h.Callsign.Equals(t.Callsign, StringComparison.OrdinalIgnoreCase) && h.Field == span.Field)
+                        dc.DrawRoundedRectangle(Paint.Brush(Paint.WithAlpha(theme.Accent, 0x38)), null, zone, 2, 2);
+                }
+                dc.DrawText(text, new Point(x, y + (lineHeight - size * 1.2) / 2));
+                x += w;
+            }
+            y += lineHeight;
+        }
     }
 
     private void DrawSmallText(DrawingContext dc, string text, Point at, string color, double size = 10)
@@ -405,6 +436,16 @@ public sealed class RadarView : FrameworkElement
     // ---- input ---------------------------------------------------------------------------------
 
     private string? HitTag(Point p) => _tagBounds.FirstOrDefault(kv => kv.Value.Contains(p)).Key;
+
+    private (string Callsign, string Field)? HitField(Point p)
+    {
+        foreach (var z in _fieldZones)
+            if (z.Bounds.Contains(p)) return (z.Callsign, z.Field);
+        return null;
+    }
+
+    private Track? FindTrack(string callsign) =>
+        Tracks().FirstOrDefault(t => t.Callsign.Equals(callsign, StringComparison.OrdinalIgnoreCase));
 
     private Track? HitTarget(Point p, double radius = 9)
     {
@@ -447,10 +488,9 @@ public sealed class RadarView : FrameworkElement
         var tag = HitTag(p);
         if (tag != null)
         {
-            _draggingTag = tag;
+            _pendingTagClick = (tag, HitField(p)?.Field, p);
             _dragStart = p;
             _dragOrigin = _tagOffsets.TryGetValue(tag, out var o) ? o : new Vector(Profile.Tags.DefaultOffsetX, Profile.Tags.DefaultOffsetY);
-            Select(Tracks().FirstOrDefault(t => t.Callsign.Equals(tag, StringComparison.OrdinalIgnoreCase)));
             CaptureMouse();
             return;
         }
@@ -468,6 +508,11 @@ public sealed class RadarView : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         _mouse = e.GetPosition(this);
+        if (_pendingTagClick is { } pending && (_mouse - pending.Start).Length > 3)
+        {
+            _draggingTag = pending.Callsign;
+            _pendingTagClick = null;
+        }
         if (_draggingTag != null)
         {
             _tagOffsets[_draggingTag] = _dragOrigin + (_mouse - _dragStart);
@@ -485,10 +530,12 @@ public sealed class RadarView : FrameworkElement
             return;
         }
         var hovered = HitTarget(_mouse);
-        if (!ReferenceEquals(hovered, Hovered))
+        var field = HitField(_mouse);
+        if (!ReferenceEquals(hovered, Hovered) || field != _hoveredField)
         {
             Hovered = hovered;
-            Cursor = hovered != null ? Cursors.Hand : null;
+            _hoveredField = field;
+            Cursor = field != null || hovered != null ? Cursors.Hand : null;
             InvalidateVisual();
         }
         ViewChanged?.Invoke(this, EventArgs.Empty);
@@ -496,6 +543,9 @@ public sealed class RadarView : FrameworkElement
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        if (_pendingTagClick is { } click && FindTrack(click.Callsign) is { } clicked)
+            TagClicked?.Invoke(this, new TagClickEventArgs(clicked, click.Field, false, e.GetPosition(this)));
+        _pendingTagClick = null;
         if (_panStart is { } start && (e.GetPosition(this) - start).Length <= 2) Select(null);
         _panStart = null;
         _draggingTag = null;
@@ -504,7 +554,14 @@ public sealed class RadarView : FrameworkElement
 
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
-        var target = HitTarget(e.GetPosition(this));
+        var p = e.GetPosition(this);
+        if (HitTag(p) is { } tag && FindTrack(tag) is { } tagged)
+        {
+            TagClicked?.Invoke(this, new TagClickEventArgs(tagged, HitField(p)?.Field, true, p));
+            e.Handled = true;
+            return;
+        }
+        var target = HitTarget(p);
         if (target == null) return;
         Select(target);
         TargetMenuRequested?.Invoke(this, target);
@@ -525,6 +582,17 @@ public sealed class RadarView : FrameworkElement
     protected override void OnMouseLeave(MouseEventArgs e)
     {
         Hovered = null;
+        _hoveredField = null;
         InvalidateVisual();
     }
+}
+
+public sealed class TagClickEventArgs(Track track, string? field, bool right, Point position) : EventArgs
+{
+    public Track Track { get; } = track;
+    /// <summary>Template field under the mouse, or null (e.g. a literal part of the tag).</summary>
+    public string? Field { get; } = field;
+    public bool Right { get; } = right;
+    /// <summary>Click position relative to the radar view.</summary>
+    public Point Position { get; } = position;
 }

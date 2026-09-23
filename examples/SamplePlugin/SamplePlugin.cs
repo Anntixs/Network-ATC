@@ -5,7 +5,7 @@ namespace SamplePlugin;
 
 /// <summary>
 /// Shows every extension point of the Network-ATC plugin API:
-///  - tag field {dist}: distance from a reference airport;
+///  - tag field {dist}: distance from a reference airport (clickable: writes distance and bearing to the log);
 ///  - command ".dist AFL123";
 ///  - overlay "Кольцо 5 NM": a 5 NM ring around the selected aircraft;
 ///  - aircraft menu item "Подсветить" that toggles a highlight color.
@@ -26,6 +26,8 @@ public sealed class DistancePlugin : IAtcPlugin
     {
         _host = host;
         host.RegisterTagField("dist", "Расстояние до UUEE, NM", a => Distance(a.Position).ToString("0", CultureInfo.InvariantCulture));
+        host.RegisterTagFieldClick("dist", (a, right) =>
+            host.Log($"{a.Callsign}: {Distance(a.Position):0.0} NM до UUEE, курс на UUEE {Bearing(a.Position):000}°"));
         host.RegisterCommand("dist", "расстояние от борта до UUEE", args =>
         {
             var target = args.Count > 0
@@ -50,6 +52,16 @@ public sealed class DistancePlugin : IAtcPlugin
         double h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
                    Math.Cos(Reference.Latitude * rad) * Math.Cos(p.Latitude * rad) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
         return 2 * 3440.065 * Math.Asin(Math.Sqrt(h));
+    }
+
+    private static double Bearing(GeoPoint p)
+    {
+        const double rad = Math.PI / 180;
+        double dLon = (Reference.Longitude - p.Longitude) * rad;
+        double y = Math.Sin(dLon) * Math.Cos(Reference.Latitude * rad);
+        double x = Math.Cos(p.Latitude * rad) * Math.Sin(Reference.Latitude * rad) -
+                   Math.Sin(p.Latitude * rad) * Math.Cos(Reference.Latitude * rad) * Math.Cos(dLon);
+        return (Math.Atan2(y, x) / rad + 360) % 360;
     }
 
     private sealed class SelectedRing(IPluginHost host) : IRadarOverlay
