@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>NetworkAtc.App</RootNamespace>
+    <AssemblyName>Network-ATC</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NetworkAtc.Core\NetworkAtc.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\demo\UUEE-demo.*" LinkBase="demo" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
