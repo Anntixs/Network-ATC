@@ -270,7 +270,11 @@ public class PluginTests
 
         registry.AircraftActions[0].Action(selected!);
         Assert.Equal("#F5A524", selected!.Highlight);
-        Directory.Delete(root, true);
+        try { Directory.Delete(root, true); }
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+        {
+            // On Windows the loaded plugin DLL stays locked until the process exits.
+        }
     }
 
 #if DEBUG
