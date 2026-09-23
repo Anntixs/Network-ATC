@@ -71,9 +71,11 @@ public partial class SettingsWindow : Window
     private static readonly Dictionary<string, string> ActionTitles = new()
     {
         ["ZoomIn"] = "Приблизить", ["ZoomOut"] = "Отдалить", ["CenterOnSector"] = "К центру сектора",
-        ["FocusCommandLine"] = "Командная строка", ["ToggleAircraftList"] = "Боковая панель", ["ToggleMessages"] = "Сообщения",
+        ["FocusCommandLine"] = "Командная строка", ["ToggleAircraftList"] = "Весь трафик", ["ToggleMessages"] = "Сообщения",
         ["ToggleFlightPlan"] = "План полёта", ["ToggleLayers"] = "Слои", ["OpenSettings"] = "Настройки",
         ["Connect"] = "Подключение", ["TrackSelected"] = "Сопровождать выбранный", ["ClearSelection"] = "Снять выбор",
+        ["ToggleDepartures"] = "Список вылета", ["ToggleArrivals"] = "Список прилёта", ["ToggleConflicts"] = "Конфликты (STCA)",
+        ["ToggleAtc"] = "Диспетчеры", ["OpenSector"] = "Выбор сектора",
     };
 
     private readonly TagFields _fields;
@@ -103,6 +105,7 @@ public partial class SettingsWindow : Window
 
         _keys = ActionTitles.Select(a => new KeyEntry(a.Key, a.Value, profile.KeyBindings.GetValueOrDefault(a.Key, ""))).ToList();
         KeyList.ItemsSource = _keys;
+        AirportsBox.Text = string.Join(" ", profile.ActiveAirports);
         AliasBox.Text = string.Join(Environment.NewLine, profile.Aliases.Select(a => $"{a.Key} = {a.Value}"));
 
         _registry = plugins.Registry;
@@ -196,7 +199,7 @@ public partial class SettingsWindow : Window
 
     private void OnBrowseSector(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "Сектор EuroScope (*.sct;*.sct2)|*.sct;*.sct2|Все файлы|*.*" };
+        var dialog = new OpenFileDialog { Filter = "Секторы (*.natc;*.sct;*.sct2)|*.natc;*.sct;*.sct2|Все файлы|*.*" };
         if (dialog.ShowDialog(this) != true) return;
         Result.SectorFile = dialog.FileName;
         DataContext = null;
@@ -241,7 +244,18 @@ public partial class SettingsWindow : Window
             }
         }
 
+        var airports = AirportsBox.Text.Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(a => a.ToUpperInvariant()).Distinct().ToList();
+        if (airports.FirstOrDefault(a => a.Length != 4 || !a.All(char.IsLetterOrDigit)) is { } bad)
+        {
+            ErrorText.Text = $"Аэродром «{bad}»: нужен 4-буквенный код ICAO";
+            Nav.SelectedIndex = 1;
+            return;
+        }
+
         Result.Theme = theme;
+        Result.ActiveAirports = airports;
+        if (ResetWindowsBox.IsChecked == true) Result.Windows = Profile.DefaultWindows();
         Result.TagClicks = ((IEnumerable<ClickEntry>)ClickList.ItemsSource).ToDictionary(
             c => c.Field, c => new TagClickBinding(c.Left, c.Right), StringComparer.OrdinalIgnoreCase);
         Result.Aliases = aliases;

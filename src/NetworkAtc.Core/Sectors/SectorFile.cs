@@ -37,6 +37,8 @@ public sealed class SectorFile
 
     /// <summary>Line layers by section name: ARTCC, ARTCC HIGH, ARTCC LOW, SID, STAR, LOW AIRWAY, HIGH AIRWAY, GEO.</summary>
     public Dictionary<string, List<SectorLine>> Lines { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Default color of a map layer (native sectors), used when a line has no color of its own.</summary>
+    public Dictionary<string, string> LayerColors { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<Region> Regions { get; } = [];
     public List<SectorLabel> Labels { get; } = [];
 
@@ -50,4 +52,11 @@ public sealed class SectorFile
     public List<string> Warnings { get; } = [];
 
     public IEnumerable<SectorLine> AllLines => Lines.Values.SelectMany(l => l);
+
+    /// <summary>The EuroScope line sections, in drawing order.</summary>
+    public static IReadOnlyList<string> StandardLayers { get; } =
+        ["GEO", "LOW AIRWAY", "HIGH AIRWAY", "ARTCC LOW", "ARTCC HIGH", "ARTCC", "SID", "STAR"];
+
+    /// <summary>Map layers that are not EuroScope sections (only in Network-ATC sectors).</summary>
+    public IEnumerable<string> CustomLayers => Lines.Keys.Where(k => !StandardLayers.Contains(k, StringComparer.OrdinalIgnoreCase));
 }

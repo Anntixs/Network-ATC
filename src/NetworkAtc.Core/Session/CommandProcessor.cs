@@ -39,6 +39,7 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
         (".msg ПОЗЫВНОЙ текст", "личное сообщение"),
         (".freq 118.100", "основная частота"),
         (".range 150", "дальность видимости, NM"),
+        (".airport UUEE UUDD", "активные аэродромы для списков вылетов и прилётов (без кодов — показать)"),
         (".plugins", "список плагинов и их команд"),
         (".demo", "демо-трафик без сервера (повторно — выключить)"),
         (".help", "эта справка"),
@@ -157,6 +158,19 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
                 if (session.IsConnected) return "Демо-трафик доступен только без подключения к сети";
                 _demo = new DemoTraffic(session, DemoCenter);
                 return "Демо-трафик включён: 10 бортов вокруг сектора. .demo — выключить";
+            case "airport":
+            case "airports":
+            {
+                var p = profile();
+                if (args.Count > 0)
+                {
+                    var codes = args.Select(a => a.ToUpperInvariant()).Where(a => a.Length == 4 && a.All(char.IsLetterOrDigit)).Distinct().ToList();
+                    if (codes.Count != args.Count) return "Коды аэродромов — 4 символа ICAO, например .airport UUEE UUDD";
+                    p.ActiveAirports = codes;
+                    Changed?.Invoke(this, EventArgs.Empty);
+                }
+                return p.ActiveAirports.Count == 0 ? "Активных аэродромов нет. Пример: .airport UUEE" : "Активные аэродромы: " + string.Join(' ', p.ActiveAirports);
+            }
             case "plugins":
             {
                 var sb = new StringBuilder();

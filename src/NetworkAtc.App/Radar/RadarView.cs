@@ -178,12 +178,15 @@ public sealed class RadarView : FrameworkElement
         foreach (var (layer, color, dashed) in layers)
         {
             if (!Profile.IsLayerVisible(layer) || !s.Lines.TryGetValue(layer, out var lines)) continue;
-            foreach (var l in lines)
-            {
-                Point a = ToScreen(l.From), b = ToScreen(l.To);
-                if (!OnScreen(a, 4000) && !OnScreen(b, 4000)) continue;
-                dc.DrawLine(Paint.Pen(MapColor(l.Color, color), 1, dashed), a, b);
-            }
+            string layerColor = s.LayerColors.TryGetValue(layer, out var lc) && Profile.UseSectorFileColors ? lc : color;
+            DrawLines(dc, lines, l => MapColor(l.Color, layerColor), dashed);
+        }
+        // Layers that only exist in Network-ATC sectors always use their own colors.
+        foreach (var layer in s.CustomLayers)
+        {
+            if (!Profile.IsLayerVisible(layer)) continue;
+            string layerColor = s.LayerColors.GetValueOrDefault(layer, theme.Geo);
+            DrawLines(dc, s.Lines[layer], l => l.Color ?? layerColor, false);
         }
 
         if (Profile.IsLayerVisible("SECTORLINES"))
@@ -254,6 +257,16 @@ public sealed class RadarView : FrameworkElement
             foreach (var l in s.Labels) DrawSmallText(dc, l.Text, ToScreen(l.Position), MapColor(l.Color, theme.Label));
         if (Profile.IsLayerVisible("FREETEXT"))
             foreach (var l in s.FreeTexts) DrawSmallText(dc, l.Text, ToScreen(l.Position), theme.Label);
+    }
+
+    private void DrawLines(DrawingContext dc, IEnumerable<SectorLine> lines, Func<SectorLine, string> color, bool dashed)
+    {
+        foreach (var l in lines)
+        {
+            Point a = ToScreen(l.From), b = ToScreen(l.To);
+            if (!OnScreen(a, 4000) && !OnScreen(b, 4000)) continue;
+            dc.DrawLine(Paint.Pen(color(l), 1, dashed), a, b);
+        }
     }
 
     private void DrawOverlays(DrawingContext dc)

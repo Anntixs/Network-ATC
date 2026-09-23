@@ -50,14 +50,30 @@ public sealed class ConnectionSettings
     public string RealName { get; set; } = "";
 }
 
+/// <summary>Position, size and visibility of a floating list window.</summary>
+public sealed class WindowLayout
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; } = 320;
+    public double Height { get; set; } = 220;
+    public bool Visible { get; set; }
+
+    public WindowLayout() { }
+    public WindowLayout(double x, double y, double width, double height, bool visible) =>
+        (X, Y, Width, Height, Visible) = (x, y, width, height, visible);
+}
+
+public sealed class RecentSector
+{
+    public string Path { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTime LastUsed { get; set; }
+}
+
 public sealed class PanelSettings
 {
-    public bool ShowAircraftList { get; set; } = true;
-    public bool ShowMessages { get; set; } = true;
-    public bool ShowControllers { get; set; } = true;
     public bool ShowFlightPlan { get; set; } = true;
-    public double SidePanelWidth { get; set; } = 300;
-    public double MessagesHeight { get; set; } = 170;
     public double UiScale { get; set; } = 1.0;
     public double UiFontSize { get; set; } = 12.5;
 }
@@ -68,6 +84,10 @@ public sealed class PanelSettings
 /// </summary>
 public sealed class Profile
 {
+    /// <summary>Profile format version, used to migrate old profiles.</summary>
+    public const int CurrentVersion = 2;
+    public int Version { get; set; }
+
     public string Name { get; set; } = "Default";
     public Theme Theme { get; set; } = new();
     /// <summary>Use the colors defined in the sector file instead of the theme's map colors.</summary>
@@ -82,6 +102,33 @@ public sealed class Profile
         ["RUNWAYS"] = true, ["AIRPORTS"] = true, ["FIXES"] = false, ["FIX NAMES"] = false, ["VOR"] = true, ["NDB"] = true,
         ["FREETEXT"] = false, ["SECTORLINES"] = true, ["RANGE RINGS"] = true,
     };
+
+    /// <summary>Airports the controller works: departure and arrival lists are built for them.</summary>
+    public List<string> ActiveAirports { get; set; } = [];
+
+    /// <summary>Floating list windows by id (see <see cref="DefaultWindows"/>).</summary>
+    public Dictionary<string, WindowLayout> Windows { get; set; } = DefaultWindows();
+
+    public List<RecentSector> RecentSectors { get; set; } = [];
+    public bool ShowSectorSelection { get; set; } = true;
+
+    public static Dictionary<string, WindowLayout> DefaultWindows() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["departures"] = new(16, 16, 360, 190, true),
+        ["arrivals"] = new(16, 220, 360, 190, true),
+        ["traffic"] = new(16, 424, 300, 220, false),
+        ["flightplan"] = new(-340, 16, 320, 420, true),   // negative X: from the right edge
+        ["atc"] = new(-340, 450, 320, 180, false),
+        ["conflicts"] = new(400, 16, 300, 140, false),
+        ["messages"] = new(-560, -230, 540, 210, true),   // negative Y: from the bottom edge
+    };
+
+    public void RememberSector(string path, string name)
+    {
+        RecentSectors.RemoveAll(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
+        RecentSectors.Insert(0, new RecentSector { Path = path, Name = name, LastUsed = DateTime.UtcNow });
+        if (RecentSectors.Count > 10) RecentSectors.RemoveRange(10, RecentSectors.Count - 10);
+    }
 
     public TagLayouts Tags { get; set; } = new();
     public TargetSettings Targets { get; set; } = new();
@@ -161,6 +208,11 @@ public sealed class Profile
         ["Connect"] = "Ctrl+K",
         ["TrackSelected"] = "F8",
         ["ClearSelection"] = "Escape",
+        ["ToggleDepartures"] = "F5",
+        ["ToggleArrivals"] = "F7",
+        ["ToggleConflicts"] = "F9",
+        ["ToggleAtc"] = "F11",
+        ["OpenSector"] = "Ctrl+O",
     };
 
     private static readonly JsonSerializerOptions Json = new()
@@ -182,11 +234,21 @@ public sealed class Profile
         {
             if (File.Exists(path))
             {
-                var p = JsonSerializer.Deserialize<Profile>(File.ReadAllText(path), Json) ?? new Profile();
+                var p = JsonSerializer.Deserialize<Profile>(File.ReadAllText(path), Json) ?? new Profile { Version = CurrentVersion };
                 // Keep new default key bindings / layers that older profile files don't have.
                 foreach (var (k, v) in DefaultKeyBindings) p.KeyBindings.TryAdd(k, v);
                 foreach (var (k, v) in new Profile().Layers) p.Layers.TryAdd(k, v);
                 p.TagClicks = new Dictionary<string, TagClickBinding>(p.TagClicks ?? [], StringComparer.OrdinalIgnoreCase);
+                p.Windows = new Dictionary<string, WindowLayout>(p.Windows ?? [], StringComparer.OrdinalIgnoreCase);
+                foreach (var (k, v) in DefaultWindows()) p.Windows.TryAdd(k, v);
+                p.ActiveAirports ??= [];
+                p.RecentSectors ??= [];
+                if (p.Version < 2)
+                {
+                    // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).
+                    p.Theme = new Theme();
+                    p.Version = CurrentVersion;
+                }
                 foreach (var (k, v) in DefaultTagClicks()) p.TagClicks.TryAdd(k, v);
                 return p;
             }
@@ -195,11 +257,12 @@ public sealed class Profile
         {
             // Corrupt profile: start from defaults.
         }
-        return new Profile();
+        return new Profile { Version = CurrentVersion };
     }
 
     public void Save(string path)
     {
+        Version = CurrentVersion;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(this, Json));
     }

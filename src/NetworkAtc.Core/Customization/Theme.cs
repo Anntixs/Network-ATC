@@ -6,48 +6,48 @@ namespace NetworkAtc.Core.Customization;
 /// </summary>
 public sealed class Theme
 {
-    public string Name { get; set; } = "Midnight";
+    public string Name { get; set; } = "SkyNetwork";
 
-    // Window chrome
-    public string Background { get; set; } = "#0E1116";
-    public string Panel { get; set; } = "#151A21";
-    public string PanelBorder { get; set; } = "#232A33";
-    public string Text { get; set; } = "#D7DDE4";
-    public string MutedText { get; set; } = "#6B7682";
-    public string Accent { get; set; } = "#4FB3FF";
-    public string Danger { get; set; } = "#FF5A5F";
-    public string Success { get; set; } = "#3DD68C";
+    // Window chrome: graphite panels, as in Aurora; compact like EuroScope.
+    public string Background { get; set; } = "#1C2126";
+    public string Panel { get; set; } = "#242A30";
+    public string PanelBorder { get; set; } = "#353D46";
+    public string Text { get; set; } = "#E1E6EB";
+    public string MutedText { get; set; } = "#8A95A1";
+    public string Accent { get; set; } = "#3FA7D6";
+    public string Danger { get; set; } = "#E5484D";
+    public string Success { get; set; } = "#3DBB7E";
 
-    // Map
-    public string RadarBackground { get; set; } = "#0B0E13";
-    public string Artcc { get; set; } = "#2B3440";
-    public string ArtccHigh { get; set; } = "#24303B";
-    public string ArtccLow { get; set; } = "#26313A";
-    public string Sid { get; set; } = "#2F5D50";
-    public string Star { get; set; } = "#5A4A2F";
-    public string LowAirway { get; set; } = "#1F2A33";
-    public string HighAirway { get; set; } = "#1F2A33";
-    public string Geo { get; set; } = "#303A45";
-    public string Region { get; set; } = "#161C24";
-    public string Runway { get; set; } = "#9AA7B4";
-    public string Airport { get; set; } = "#7C8894";
-    public string Fix { get; set; } = "#3E4A56";
-    public string Vor { get; set; } = "#58708A";
-    public string Ndb { get; set; } = "#6A5E80";
-    public string Label { get; set; } = "#5C6773";
-    public string SectorLine { get; set; } = "#3A4A5C";
-    public string RangeRings { get; set; } = "#161D26";
+    // Map: deep blue-grey scope.
+    public string RadarBackground { get; set; } = "#17232C";
+    public string Artcc { get; set; } = "#3C5566";
+    public string ArtccHigh { get; set; } = "#34495A";
+    public string ArtccLow { get; set; } = "#34495A";
+    public string Sid { get; set; } = "#3F7A63";
+    public string Star { get; set; } = "#7D6A3F";
+    public string LowAirway { get; set; } = "#26394A";
+    public string HighAirway { get; set; } = "#26394A";
+    public string Geo { get; set; } = "#2C4150";
+    public string Region { get; set; } = "#1D2E39";
+    public string Runway { get; set; } = "#C9D2DA";
+    public string Airport { get; set; } = "#8FA3B3";
+    public string Fix { get; set; } = "#4B6474";
+    public string Vor { get; set; } = "#6C8FB0";
+    public string Ndb { get; set; } = "#8C7BB0";
+    public string Label { get; set; } = "#7F93A3";
+    public string SectorLine { get; set; } = "#52708A";
+    public string RangeRings { get; set; } = "#1F303B";
 
-    // Traffic
-    public string Target { get; set; } = "#C9D3DD";
+    // Traffic: white targets, light tags, yellow selection (ASEL).
+    public string Target { get; set; } = "#DCE6EE";
     public string TargetTracked { get; set; } = "#FFFFFF";
-    public string TargetOnGround { get; set; } = "#6B7682";
-    public string TagText { get; set; } = "#AEB9C4";
-    public string TagTextTracked { get; set; } = "#F2F6FA";
+    public string TargetOnGround { get; set; } = "#7B8C99";
+    public string TagText { get; set; } = "#B9C8D4";
+    public string TagTextTracked { get; set; } = "#FFFFFF";
     public string TagBackground { get; set; } = "#00000000";
-    public string TagSelected { get; set; } = "#4FB3FF";
-    public string History { get; set; } = "#3A4653";
-    public string PredictionLine { get; set; } = "#56616D";
+    public string TagSelected { get; set; } = "#F2C94C";
+    public string History { get; set; } = "#4F6B7C";
+    public string PredictionLine { get; set; } = "#6F8797";
     public string Conflict { get; set; } = "#FF5A5F";
     public string Emergency { get; set; } = "#FF3B30";
 
@@ -63,6 +63,17 @@ public sealed class Theme
     public static IReadOnlyList<Theme> BuiltIn { get; } =
     [
         new Theme(),
+        new Theme
+        {
+            Name = "Midnight",
+            Background = "#0E1116", Panel = "#151A21", PanelBorder = "#232A33", Text = "#D7DDE4", MutedText = "#6B7682",
+            Accent = "#4FB3FF", Danger = "#FF5A5F", Success = "#3DD68C",
+            RadarBackground = "#0B0E13", Artcc = "#2B3440", ArtccHigh = "#24303B", ArtccLow = "#26313A", Sid = "#2F5D50",
+            Star = "#5A4A2F", LowAirway = "#1F2A33", HighAirway = "#1F2A33", Geo = "#303A45", Region = "#161C24",
+            Runway = "#9AA7B4", Airport = "#7C8894", Fix = "#3E4A56", Vor = "#58708A", Ndb = "#6A5E80", Label = "#5C6773",
+            SectorLine = "#3A4A5C", RangeRings = "#161D26", Target = "#C9D3DD", TargetTracked = "#FFFFFF", TargetOnGround = "#6B7682",
+            TagText = "#AEB9C4", TagTextTracked = "#F2F6FA", TagSelected = "#4FB3FF", History = "#3A4653", PredictionLine = "#56616D",
+        },
         new Theme
         {
             Name = "Graphite",

@@ -1,0 +1,81 @@
+<Window x:Class="NetworkAtc.App.Views.SectorSelectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Network-ATC — выбор сектора" Width="760" Height="480" ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen" Style="{StaticResource AtcWindow}">
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="280"/>
+      <ColumnDefinition/>
+    </Grid.ColumnDefinitions>
+
+    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="22,22,22,18">
+        <StackPanel DockPanel.Dock="Top">
+          <TextBlock Text="NETWORK-ATC" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}"/>
+          <TextBlock Text="радар диспетчера SkyNetwork" Style="{StaticResource Muted}" Margin="0,2,0,0"/>
+          <TextBlock Text="ОТКРЫТЬ СЕКТОР" Style="{StaticResource SectionTitle}" Margin="0,26,0,8"/>
+          <Button Style="{StaticResource Primary}" HorizontalContentAlignment="Left" Padding="12,9" Click="OnOpenNative">
+            <StackPanel>
+              <TextBlock Text="Сектор Network-ATC…" FontWeight="SemiBold"/>
+              <TextBlock Text=".natc — родной формат" FontSize="11" Opacity="0.8"/>
+            </StackPanel>
+          </Button>
+          <Button HorizontalContentAlignment="Left" Padding="12,9" Margin="0,8,0,0" Click="OnOpenEuroScope">
+            <StackPanel>
+              <TextBlock Text="Сектор EuroScope…" FontWeight="SemiBold"/>
+              <TextBlock Text=".sct / .sct2 (+ .ese рядом)" FontSize="11" Style="{StaticResource Muted}"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource Ghost}" HorizontalContentAlignment="Left" Padding="12,7" Margin="0,8,0,0"
+                  Content="Демо-сектор UUEE" Click="OnDemo"/>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom">
+          <Button x:Name="ExportButton" Style="{StaticResource Ghost}" HorizontalContentAlignment="Left" Padding="12,7"
+                  Content="Экспорт текущего сектора в .natc…" Click="OnExport"/>
+          <CheckBox x:Name="ShowAtStartupBox" Content="Показывать это окно при запуске" Margin="0,10,0,0"/>
+        </StackPanel>
+        <Grid/>
+      </DockPanel>
+    </Border>
+
+    <DockPanel Grid.Column="1" Margin="22,22,22,18">
+      <TextBlock DockPanel.Dock="Top" Text="НЕДАВНИЕ СЕКТОРЫ" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
+      <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"/>
+        <DockPanel Margin="0,8,0,0">
+          <Button DockPanel.Dock="Left" Style="{StaticResource Ghost}" Content="Убрать из списка" Click="OnForget"/>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Выход" IsCancel="True" Margin="0,0,8,0"/>
+            <Button Content="Открыть" IsDefault="True" Style="{StaticResource Primary}" Click="OnOpenRecent"/>
+          </StackPanel>
+        </DockPanel>
+      </StackPanel>
+      <Grid>
+        <ListBox x:Name="RecentList" MouseDoubleClick="OnRecentDoubleClick" BorderThickness="0" Background="Transparent">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid Margin="4,6">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <Border Width="78" CornerRadius="3" Padding="0,3" Margin="0,0,12,0" VerticalAlignment="Center"
+                        Background="{DynamicResource HoverBrush}">
+                  <TextBlock Text="{Binding Format}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center"
+                             Foreground="{DynamicResource AccentBrush}"/>
+                </Border>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                  <TextBlock Text="{Binding Details}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBlock x:Name="EmptyText" Style="{StaticResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center"
+                   TextAlignment="Center" Text="Здесь появятся открытые ранее секторы.&#x0a;Откройте файл слева или запустите демо."/>
+      </Grid>
+    </DockPanel>
+  </Grid>
+</Window>
