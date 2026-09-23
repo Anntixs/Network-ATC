@@ -3,6 +3,9 @@ using NetworkAtc.Plugins;
 
 namespace NetworkAtc.Core.Tags;
 
+/// <summary>A piece of a rendered tag line; <see cref="Field"/> is the template field that produced it, or null.</summary>
+public sealed record TagSpan(string Text, string? Field);
+
 /// <summary>
 /// A tag layout such as "{callsign} {wtc}\n{fl}{vs} {cfl}\n{gs10} {dest}".
 /// Each line is a sequence of text and {field} placeholders; {field|text} shows text when the field is empty.
@@ -58,41 +61,63 @@ public sealed class TagTemplate
         return new TagTemplate(source, lines);
     }
 
-    public IReadOnlyList<string> Render(IAircraft aircraft, TagFields fields)
+    /// <summary>Tag lines as plain text.</summary>
+    public IReadOnlyList<string> Render(IAircraft aircraft, TagFields fields) =>
+        RenderSpans(aircraft, fields).Select(line => string.Concat(line.Select(s => s.Text))).ToList();
+
+    /// <summary>
+    /// Tag lines as spans, each remembering which field produced it (null for literal text),
+    /// so the radar can tell which field was clicked.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<TagSpan>> RenderSpans(IAircraft aircraft, TagFields fields)
     {
-        var result = new List<string>();
-        var sb = new StringBuilder();
+        var result = new List<IReadOnlyList<TagSpan>>();
         foreach (var line in _lines)
         {
-            sb.Clear();
+            var spans = new List<TagSpan>();
             bool anyField = false, anyValue = false;
             foreach (var part in line)
             {
                 switch (part)
                 {
                     case Literal l:
-                        sb.Append(l.Text);
+                        Append(spans, l.Text, null);
                         break;
                     case Field f:
                         anyField = true;
                         string value = fields.Resolve(f.Key, aircraft) ?? $"{{{f.Key}}}";
                         if (value.Length == 0) value = f.Fallback;
                         if (value.Length > 0) anyValue = true;
-                        sb.Append(value);
+                        Append(spans, value, f.Key);
                         break;
                 }
             }
-            string text = CollapseSpaces(sb.ToString()).Trim();
-            if (text.Length > 0 && (!anyField || anyValue)) result.Add(text);
+            Trim(spans);
+            if (spans.Count > 0 && (!anyField || anyValue)) result.Add(spans);
         }
         return result;
     }
 
-    private static string CollapseSpaces(string s)
+    /// <summary>Appends text, collapsing runs of spaces across span boundaries.</summary>
+    private static void Append(List<TagSpan> spans, string text, string? key)
     {
-        var sb = new StringBuilder(s.Length);
-        foreach (char c in s)
-            if (c != ' ' || sb.Length == 0 || sb[^1] != ' ') sb.Append(c);
-        return sb.ToString();
+        var sb = new StringBuilder(text.Length);
+        char prev = spans.Count > 0 && spans[^1].Text.Length > 0 ? spans[^1].Text[^1] : '\0';
+        foreach (char c in text)
+        {
+            if (c == ' ' && (prev == ' ' || prev == '\0' && spans.Count == 0 && sb.Length == 0)) continue;
+            sb.Append(c);
+            prev = c;
+        }
+        if (sb.Length > 0) spans.Add(new TagSpan(sb.ToString(), key));
+    }
+
+    private static void Trim(List<TagSpan> spans)
+    {
+        while (spans.Count > 0 && spans[0].Text.TrimStart().Length == 0) spans.RemoveAt(0);
+        while (spans.Count > 0 && spans[^1].Text.TrimEnd().Length == 0) spans.RemoveAt(spans.Count - 1);
+        if (spans.Count == 0) return;
+        spans[0] = spans[0] with { Text = spans[0].Text.TrimStart() };
+        spans[^1] = spans[^1] with { Text = spans[^1].Text.TrimEnd() };
     }
 }

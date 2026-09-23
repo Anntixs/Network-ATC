@@ -55,6 +55,17 @@ public sealed class KeyEntry(string action, string title, string gesture) : INot
 
 public sealed record PluginEntry(string Title, string Details);
 
+public sealed record ActionOption(string Id, string Title);
+
+/// <summary>One row of the tag click table: a field and its left / right click actions.</summary>
+public sealed class ClickEntry(string field, string left, string right, IReadOnlyList<ActionOption> actions)
+{
+    public string Field { get; } = field;
+    public string Left { get; set; } = left;
+    public string Right { get; set; } = right;
+    public IReadOnlyList<ActionOption> Actions { get; } = actions;
+}
+
 public partial class SettingsWindow : Window
 {
     private static readonly Dictionary<string, string> ActionTitles = new()
@@ -69,6 +80,7 @@ public partial class SettingsWindow : Window
     private readonly Track _sample;
     private List<ColorEntry> _colors = [];
     private readonly List<KeyEntry> _keys;
+    private readonly PluginRegistry _registry;
 
     public Profile Result { get; }
 
@@ -93,6 +105,9 @@ public partial class SettingsWindow : Window
         KeyList.ItemsSource = _keys;
         AliasBox.Text = string.Join(Environment.NewLine, profile.Aliases.Select(a => $"{a.Key} = {a.Value}"));
 
+        _registry = plugins.Registry;
+        LoadClicks(profile.TagClicks);
+
         var entries = plugins.Plugins.Select(p => new PluginEntry($"{p.Plugin.Name} {p.Plugin.Version}",
             $"{(p.Plugin.Author.Length > 0 ? p.Plugin.Author + " · " : "")}{Path.GetFileName(p.File)}")).ToList();
         entries.AddRange(plugins.Errors.Select(e => new PluginEntry("⚠ " + Path.GetFileName(e.File), e.Reason)));
@@ -101,6 +116,19 @@ public partial class SettingsWindow : Window
         PluginList.ItemsSource = entries;
         Nav.SelectedIndex = 0;
     }
+
+    private void LoadClicks(IReadOnlyDictionary<string, TagClickBinding> bindings)
+    {
+        var actions = TagActions.All.Select(a => new ActionOption(a.Id, a.Title)).ToList();
+        var profile = new Profile { TagClicks = new(bindings, StringComparer.OrdinalIgnoreCase) };
+        ClickList.ItemsSource = _fields.All.Select(f =>
+        {
+            bool plugin = _registry.TagClicks.ContainsKey(f.Key);
+            return new ClickEntry(f.Key, profile.ResolveTagClick(f.Key, false, plugin), profile.ResolveTagClick(f.Key, true, plugin), actions);
+        }).ToList();
+    }
+
+    private void OnResetClicks(object sender, RoutedEventArgs e) => LoadClicks(Profile.DefaultTagClicks());
 
     private void LoadColors(Theme theme) =>
         ColorList.ItemsSource = _colors = Theme.ColorKeys.Select(k => new ColorEntry(k, theme.Get(k))).ToList();
@@ -214,6 +242,8 @@ public partial class SettingsWindow : Window
         }
 
         Result.Theme = theme;
+        Result.TagClicks = ((IEnumerable<ClickEntry>)ClickList.ItemsSource).ToDictionary(
+            c => c.Field, c => new TagClickBinding(c.Left, c.Right), StringComparer.OrdinalIgnoreCase);
         Result.Aliases = aliases;
         Result.KeyBindings = _keys.Where(k => k.Gesture.Length > 0).ToDictionary(k => k.Action, k => k.Gesture, StringComparer.OrdinalIgnoreCase);
         DialogResult = true;

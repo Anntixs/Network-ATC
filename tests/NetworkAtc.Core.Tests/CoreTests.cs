@@ -261,6 +261,7 @@ public class PluginTests
         Assert.Contains(logs, l => l.Contains("загружен"));
         Assert.Single(registry.Overlays);
         Assert.Single(registry.AircraftActions);
+        Assert.True(registry.TagClicks.ContainsKey("dist"));
 
         session.OnPacket(null, FsdPacket.Parse("@N:AFL1:2000:1:56.2728:37.4147:5000:250:0:0")!);
         selected = session.Find("AFL1");
@@ -298,5 +299,63 @@ public class DemoTests
         Assert.Contains(new Stca().Check(session.Tracks), c => c.A.Callsign.StartsWith("AFL900") || c.B.Callsign.StartsWith("AFL900"));
         Assert.Equal("Демо-трафик выключен", await cmd.ExecuteAsync(".demo"));
         Assert.Empty(session.Tracks);
+    }
+}
+
+public class TagInteractionTests
+{
+    [Fact]
+    public void Spans_KeepFieldKeys()
+    {
+        var t = new Track("AFL1") { AircraftType = "A20N" };
+        t.Update(new PilotReport("AFL1", true, false, 2000, new GeoPoint(56, 37), 12000, 250, 90, false, 12000), DateTime.UtcNow);
+        var lines = TagTemplate.Parse("{callsign}  {type}\n{fl} {cfl|---} {scratch}").RenderSpans(t, new TagFields());
+        Assert.Equal([("AFL1", "callsign"), (" ", null), ("A20N", "type")], lines[0].Select(s => (s.Text, s.Field)));
+        // Fallback text stays clickable; the empty {scratch} and trailing space disappear.
+        Assert.Equal([("F120", "fl"), (" ", null), ("---", "cfl")], lines[1].Select(s => (s.Text, s.Field)));
+    }
+
+    [Fact]
+    public void Levels_AroundClearedLevel()
+    {
+        var levels = TagMenus.Levels(12300, 35000, 10000, count: 5);
+        Assert.Equal([37000, 36000, 35000, 34000, 33000], levels);
+        var low = TagMenus.Levels(4200, null, 10000, count: 5);
+        Assert.Equal([5000, 4500, 4000, 3500, 3000], low);
+    }
+
+    [Fact]
+    public void Headings_StartNearCurrent()
+    {
+        var h = TagMenus.Headings(358);
+        Assert.Equal(360, h[0]);
+        Assert.Equal(5, h[1]);
+        Assert.Equal(72, h.Count);
+        Assert.Equal(355, h[^1]);
+        Assert.Equal(2, TagMenus.NearestIndex([300, 290, 280, 270], 281));
+    }
+
+    [Fact]
+    public void ResolvesClickActions()
+    {
+        var p = new Profile();
+        Assert.Equal(TagActions.ToggleTrack, p.ResolveTagClick("callsign", right: false, pluginHandles: false));
+        Assert.Equal(TagActions.AircraftMenu, p.ResolveTagClick("callsign", right: true, pluginHandles: false));
+        Assert.Equal(TagActions.ClearedLevel, p.ResolveTagClick("cfl", false, false));
+        Assert.Equal(TagActions.Plugin, p.ResolveTagClick("dist", false, pluginHandles: true));
+        Assert.Equal(TagActions.Select, p.ResolveTagClick(null, false, false));
+        p.TagClicks["cfl"] = new TagClickBinding(TagActions.None, TagActions.Heading);
+        Assert.Equal(TagActions.Heading, p.ResolveTagClick("CFL", true, false));
+    }
+
+    [Fact]
+    public void OldProfilesGetDefaultClicks()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """{ "Name": "Old", "TagClicks": { "cfl": { "Left": "none", "Right": "none" } } }""");
+        var p = Profile.Load(path);
+        File.Delete(path);
+        Assert.Equal(TagActions.None, p.ResolveTagClick("cfl", false, false));        // user choice kept
+        Assert.Equal(TagActions.Heading, p.ResolveTagClick("hdg", false, false));     // default added
     }
 }
