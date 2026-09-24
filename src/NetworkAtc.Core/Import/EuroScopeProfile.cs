@@ -150,16 +150,12 @@ public static class EuroScopePaths
                 current = Path.GetDirectoryName(current) ?? current;
                 continue;
             }
-            string exact = Path.Combine(current, s);
             bool wantDirectory = !last || directory;
-            if (Exists(exact, wantDirectory))
-            {
-                current = exact;
-                continue;
-            }
             if (!System.IO.Directory.Exists(current)) return null;
-            var entries = wantDirectory ? System.IO.Directory.EnumerateDirectories(current) : System.IO.Directory.EnumerateFiles(current);
-            string? match = entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e), s, StringComparison.OrdinalIgnoreCase));
+            // The name as it is on disk, even where the file system ignores case (Windows): an exact match first.
+            var entries = (wantDirectory ? System.IO.Directory.EnumerateDirectories(current) : System.IO.Directory.EnumerateFiles(current)).ToList();
+            string? match = entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e), s, StringComparison.Ordinal))
+                            ?? entries.FirstOrDefault(e => string.Equals(Path.GetFileName(e), s, StringComparison.OrdinalIgnoreCase));
             if (match == null) return null;
             current = match;
         }
