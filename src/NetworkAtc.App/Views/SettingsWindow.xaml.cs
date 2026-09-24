@@ -187,7 +187,7 @@ public partial class SettingsWindow : Window
     {
         if (TagPreview == null || _sample == null) return;
         string Render(string template) => string.Join("\n", TagTemplate.Parse(template).Render(_sample, _fields));
-        TagPreview.Text = $"{Render(Result.Tags.Untracked)}\n\n{Render(Result.Tags.Tracked)}\n\n{Render(Result.Tags.Detailed)}";
+        TagPreview.Text = $"{Render(Result.Tags.Untracked)}\n\n{Render(Result.Tags.Tracked)}\n{Render(Result.Tags.Detailed)}";
     }
 
     private void OnGestureKeyDown(object sender, KeyEventArgs e)

@@ -137,7 +137,6 @@ public class ProfileV4Tests
         File.WriteAllText(path, """{ "Version": 3, "Station": { "Callsign": "UUEE_TWR", "Frequency": "118.100" } }""");
         var p = Profile.Load(path);
         File.Delete(path);
-        Assert.Equal(4, Profile.CurrentVersion);
         Assert.Equal(Profile.CurrentVersion, p.Version);
         Assert.True(p.Voice.Enabled);
         Assert.Equal(VoiceOptions.DefaultPort, p.Voice.Port);

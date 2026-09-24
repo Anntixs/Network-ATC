@@ -34,7 +34,8 @@ public sealed class RadarView : FrameworkElement
     private Vector _dragOrigin;
     private Point _mouse;
     private readonly Dictionary<string, Vector> _tagOffsets = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, Rect> _tagBounds = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Tag rectangles in drawing order: the last one is on top.</summary>
+    private readonly List<(string Callsign, Rect Bounds)> _tagBounds = [];
     private readonly List<(Rect Bounds, string Callsign, string Field)> _fieldZones = [];
     private (string Callsign, string Field)? _hoveredField;
     private (string Callsign, string? Field, Point Start)? _pendingTagClick;
@@ -272,8 +273,14 @@ public sealed class RadarView : FrameworkElement
                 if (_nmPerPixel < 0.6) DrawSmallText(dc, a.Name, new Point(p.X + 5, p.Y + 2), theme.Airport);
             }
         }
-        if (Profile.IsLayerVisible("LABELS"))
-            foreach (var l in s.Labels) DrawSmallText(dc, l.Text, ToScreen(l.Position), MapColor(l.Color, theme.Label));
+        // Labels of an own map layer (plugin maps, stand numbers) follow that layer; the others follow LABELS.
+        bool labels = Profile.IsLayerVisible("LABELS");
+        foreach (var l in s.Labels)
+        {
+            bool own = l.Group.Length > 0 && s.CustomLayers.Contains(l.Group);
+            if (own ? Profile.IsLayerVisible(l.Group) : labels)
+                DrawSmallText(dc, l.Text, ToScreen(l.Position), own ? l.Color ?? s.LayerColors.GetValueOrDefault(l.Group, theme.Label) : MapColor(l.Color, theme.Label));
+        }
         if (Profile.IsLayerVisible("FREETEXT"))
             foreach (var l in s.FreeTexts) DrawSmallText(dc, l.Text, ToScreen(l.Position), theme.Label);
     }
@@ -409,7 +416,7 @@ public sealed class RadarView : FrameworkElement
             DrawSmallText(dc, $"STCA {c.DistanceNm:0.0} NM", mid, theme.Conflict);
         }
 
-        foreach (var t in tracks.OrderBy(t => t.IsTracked).ThenBy(t => ReferenceEquals(t, Selected)))
+        foreach (var t in tracks.OrderBy(t => t.IsTracked).ThenBy(t => ReferenceEquals(t, Selected)).ThenBy(t => ReferenceEquals(t, Hovered)))
         {
             var p = ToScreen(t.Position);
             if (!OnScreen(p, 200)) continue;
@@ -467,25 +474,39 @@ public sealed class RadarView : FrameworkElement
             if (selected) dc.DrawEllipse(null, Paint.Pen(theme.TagSelected, 1), p, s + 8, s + 8);
             if (IsHeard(t.Callsign)) dc.DrawEllipse(null, Paint.Pen(theme.Accent, 2), p, s + 11, s + 11);
 
-            DrawTag(dc, t, p, theme, selected || hovered, emergency || conflicted.Contains(t.Callsign), dip);
+            DrawTag(dc, t, p, theme, hovered, emergency || conflicted.Contains(t.Callsign), dip);
         }
     }
 
     private TrackState StateOf(Track t) =>
         Workspace?.StateOf(t) ?? (t.IsTracked ? TrackState.Assumed : TrackState.NotConcerned);
 
-    private void DrawTag(DrawingContext dc, Track t, Point target, Theme theme, bool detailed, bool alert, double dip)
+    private TagTemplate Template(string layout)
     {
-        var state = StateOf(t);
-        bool correlated = state is TrackState.Assumed or TrackState.TransferFromMe or TrackState.TransferToMe;
-        string layout = detailed ? Profile.Tags.Detailed : correlated ? Profile.Tags.Tracked : Profile.Tags.Untracked;
         if (!_templates.TryGetValue(layout, out var template))
         {
             if (_templates.Count > 20) _templates.Clear();
             _templates[layout] = template = TagTemplate.Parse(layout);
         }
-        var lines = template.RenderSpans(t, TagFields);
+        return template;
+    }
+
+    /// <summary>
+    /// Draws a tag the EuroScope way: the tag of the aircraft's state, plus the detailed lines under it
+    /// while the mouse is over the aircraft. The first line never moves, so the field under the mouse
+    /// stays under the mouse; warnings are written above the tag.
+    /// </summary>
+    private void DrawTag(DrawingContext dc, Track t, Point target, Theme theme, bool detailed, bool alert, double dip)
+    {
+        var state = StateOf(t);
+        bool correlated = state is TrackState.Assumed or TrackState.TransferFromMe or TrackState.TransferToMe;
+        var main = Template(correlated ? Profile.Tags.Tracked : Profile.Tags.Untracked);
+        var lines = main.RenderSpans(t, TagFields).ToList();
         if (lines.Count == 0) return;
+        int mainCount = lines.Count;
+        if (detailed) lines.AddRange(Template(Profile.Tags.Detailed).RenderSpans(t, TagFields));
+        string warning = Profile.Tags.ShowWarnings && !main.FieldKeys.Contains("warn") ? TagFields.Resolve("warn", t) ?? "" : "";
+
         bool blinkOff = false;
         if (state == TrackState.TransferToMe)
         {
@@ -505,35 +526,48 @@ public sealed class RadarView : FrameworkElement
             };
         var brush = Paint.Brush(color);
         var warningBrush = Paint.Brush(theme.Warning);
-        double size = Profile.Tags.FontSize, lineHeight = size * 1.3;
+        double size = Profile.Tags.FontSize, lineHeight = Math.Round(size * 1.3);
+
+        FormattedText MeasureText(string text, Brush b) =>
+            new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size, b, dip);
 
         // Measure every span so each field gets its own clickable rectangle.
-        var measured = lines.Select(line => line.Select(span => (Span: span,
-            Text: new FormattedText(span.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size,
-                span.Field == "warn" ? warningBrush : brush, dip))).ToList()).ToList();
+        var measured = lines.Select(line => line.Select(span => (Span: span, Text: MeasureText(span.Text, span.Field == "warn" ? warningBrush : brush))).ToList()).ToList();
         double width = measured.Max(line => line.Sum(x => x.Text.WidthIncludingTrailingWhitespace));
-        double height = lineHeight * measured.Count;
+        var warningText = warning.Length > 0 ? MeasureText(warning, warningBrush) : null;
+        if (warningText != null) width = Math.Max(width, warningText.WidthIncludingTrailingWhitespace);
 
         var offset = _tagOffsets.TryGetValue(t.Callsign, out var o) ? o : new Vector(Profile.Tags.DefaultOffsetX, Profile.Tags.DefaultOffsetY);
-        var origin = target + offset;
-        var bounds = new Rect(origin.X - 4, origin.Y - 2, width + 8, height + 4);
-        _tagBounds[t.Callsign] = bounds;
+        var origin = target + offset;   // top left of the first line
+        double top = origin.Y - (warningText != null ? lineHeight : 0);
+        var bounds = new Rect(origin.X - 3, top - 1, width + 6, origin.Y + lineHeight * measured.Count - top + 2);
+        _tagBounds.Add((t.Callsign, bounds));
 
         if (Profile.Tags.ShowTagLeader)
         {
-            // Leader from the symbol to the nearest edge of the tag.
-            var edge = new Point(Math.Clamp(target.X, bounds.Left, bounds.Right), Math.Clamp(target.Y, bounds.Top, bounds.Bottom));
-            var dir = edge - target;
-            if (dir.Length > Profile.Targets.SymbolSize)
+            // The leader ends at the middle of the first line, on the side facing the aircraft.
+            double lineY = origin.Y + lineHeight / 2;
+            var end = target.X <= bounds.Left ? new Point(bounds.Left, lineY)
+                : target.X >= bounds.Right ? new Point(bounds.Right, lineY)
+                : new Point(Math.Clamp(target.X, bounds.Left, bounds.Right), target.Y < bounds.Top ? bounds.Top : bounds.Bottom);
+            var dir = end - target;
+            if (dir.Length > Profile.Targets.SymbolSize + 2)
             {
                 dir.Normalize();
-                dc.DrawLine(Paint.Pen(Paint.WithAlpha(color, 0x70), 1), target + dir * (Profile.Targets.SymbolSize / 2 + 3), edge);
+                dc.DrawLine(Paint.Pen(Paint.WithAlpha(color, 0x90), 1), target + dir * (Profile.Targets.SymbolSize / 2 + 3), end);
             }
         }
         var bg = Paint.ToColor(theme.TagBackground);
-        if (bg.A > 0 || detailed)
-            dc.DrawRoundedRectangle(Paint.Brush(bg.A > 0 ? theme.TagBackground : Paint.WithAlpha(theme.Panel, 0xD8)), null, bounds, 3, 3);
+        if (bg.A > 0)
+            dc.DrawRectangle(Paint.Brush(theme.TagBackground), null, bounds);
+        else if (detailed && measured.Count > mainCount)
+        {
+            // Only the added lines get a panel, so they stay readable over the map.
+            var extra = new Rect(bounds.Left, origin.Y + lineHeight * mainCount, bounds.Width, lineHeight * (measured.Count - mainCount) + 1);
+            dc.DrawRectangle(Paint.Brush(Paint.WithAlpha(theme.Panel, 0xD8)), Paint.Pen(Paint.WithAlpha(color, 0x50), 1), extra);
+        }
 
+        if (warningText != null) dc.DrawText(warningText, new Point(origin.X, top + (lineHeight - size * 1.2) / 2));
         double y = origin.Y;
         foreach (var line in measured)
         {
@@ -543,10 +577,14 @@ public sealed class RadarView : FrameworkElement
                 double w = text.WidthIncludingTrailingWhitespace;
                 if (span.Field != null && span.Text.Trim().Length > 0)
                 {
-                    var zone = new Rect(x - 1, y, w + 2, lineHeight);
+                    // The clickable area is the text itself, without the spaces around it.
+                    int lead = span.Text.Length - span.Text.TrimStart().Length;
+                    double leadWidth = lead > 0 ? MeasureText(span.Text[..lead], brush).WidthIncludingTrailingWhitespace : 0;
+                    double textWidth = MeasureText(span.Text.Trim(), brush).WidthIncludingTrailingWhitespace;
+                    var zone = new Rect(x + leadWidth - 1.5, y, textWidth + 3, lineHeight);
                     _fieldZones.Add((zone, t.Callsign, span.Field));
                     if (_hoveredField is { } h && h.Callsign.Equals(t.Callsign, StringComparison.OrdinalIgnoreCase) && h.Field == span.Field)
-                        dc.DrawRoundedRectangle(Paint.Brush(Paint.WithAlpha(theme.Accent, 0x38)), null, zone, 2, 2);
+                        dc.DrawRectangle(null, Paint.Pen(color, 1), zone);
                 }
                 dc.DrawText(text, new Point(x, y + (lineHeight - size * 1.2) / 2));
                 x += w;
@@ -580,12 +618,20 @@ public sealed class RadarView : FrameworkElement
 
     // ---- input ---------------------------------------------------------------------------------
 
-    private string? HitTag(Point p) => _tagBounds.FirstOrDefault(kv => kv.Value.Contains(p)).Key;
+    /// <summary>The topmost tag under the point.</summary>
+    private string? HitTag(Point p)
+    {
+        for (int i = _tagBounds.Count - 1; i >= 0; i--)
+            if (_tagBounds[i].Bounds.Contains(p)) return _tagBounds[i].Callsign;
+        return null;
+    }
 
+    /// <summary>The field under the point, only in the topmost tag there.</summary>
     private (string Callsign, string Field)? HitField(Point p)
     {
+        if (HitTag(p) is not { } tag) return null;
         foreach (var z in _fieldZones)
-            if (z.Bounds.Contains(p)) return (z.Callsign, z.Field);
+            if (z.Bounds.Contains(p) && z.Callsign.Equals(tag, StringComparison.OrdinalIgnoreCase)) return (z.Callsign, z.Field);
         return null;
     }
 
