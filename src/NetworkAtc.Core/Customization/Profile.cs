@@ -183,6 +183,8 @@ public sealed class Profile
     public Dictionary<string, Sectors.RunwayUse> ActiveRunways { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Current ATIS letter per airport.</summary>
     public Dictionary<string, string> AtisLetters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The controller's ATIS stations (UUEE_ATIS…): frequency, text, voice.</summary>
+    public List<Atis.AtisSettings> Atis { get; set; } = [];
     /// <summary>Controller info (ATIS) lines sent to pilots on request; aliases variables like $atiscode(UUEE) are expanded.</summary>
     public List<string> ControllerInfo { get; set; } = ["$mycallsign $myfreq", "Информация $atiscode($myairport)"];
     public SoundSettings Sounds { get; set; } = new();
@@ -385,6 +387,8 @@ public sealed class Profile
                 p.ActiveRunways = new Dictionary<string, Sectors.RunwayUse>(p.ActiveRunways ?? [], StringComparer.OrdinalIgnoreCase);
                 p.AtisLetters = new Dictionary<string, string>(p.AtisLetters ?? [], StringComparer.OrdinalIgnoreCase);
                 p.ControllerInfo ??= [];
+                p.Atis ??= [];
+                p.Atis.RemoveAll(a => a == null);
                 p.Sounds ??= new SoundSettings();
                 foreach (var (k, v) in DefaultTagClicks()) p.TagClicks.TryAdd(k, v);
                 return p;

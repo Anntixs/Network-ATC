@@ -28,7 +28,7 @@ public sealed class Workspace : IDisposable
         _session = session;
         _profile = profile;
         Procedures = new ProcedureAssigner(() => _sector, () => _profile().ActiveRunways);
-        Weather = new WeatherService(() => _profile().ActiveAirports);
+        Weather = new WeatherService(() => _profile().ActiveAirports.Concat(_profile().Atis.Select(a => a.Airport)));
         _session.ControllersChanged += (_, _) => UpdateOwnership();
         _session.ConnectionChanged += (_, _) => UpdateOwnership();
     }

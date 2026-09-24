@@ -85,6 +85,10 @@ public partial class MainWindow : Window
     private readonly Workspace _workspace;
     private readonly SoundService _sounds;
     private readonly VoiceService _voice;
+    private readonly NetworkAtc.Core.Atis.AtisService _atisService;
+    private readonly AtisManager _atis;
+    private AtisWindow? _atisWindow;
+    private string _atisLettersSeen = "";
     private bool _updatingPlan;
     private int _lastConflictCount;
     private bool _wasConnected;
@@ -152,6 +156,18 @@ public partial class MainWindow : Window
         _commands.Changed += (_, _) => { _dirty = true; Dispatcher.BeginInvoke(RefreshWeather); };
         _session.Coordination += (_, e) => Dispatcher.BeginInvoke(() => OnCoordination(e));
         _workspace.Weather.Updated += (_, _) => Dispatcher.BeginInvoke(RefreshWeather);
+
+        // ATIS stations: their own connections (UUEE_ATIS), the letter moves on with a new METAR, the voice follows.
+        _atisService = new NetworkAtc.Core.Atis.AtisService(() => _profile, text => _commands.ExpandVariables(text), s => _workspace.Weather.Get(s));
+        _atis = new AtisManager(_atisService, () => _profile, () => _session.IsConnected ? _session.Info : null,
+            icao => Radar.Sector?.Airports.FirstOrDefault(a => a.Name.Equals(icao, StringComparison.OrdinalIgnoreCase))?.Position,
+            (text, error) => Dispatcher.BeginInvoke(() => { if (error) Error(text); else Info(text); }));
+        _atis.Changed += () => Dispatcher.BeginInvoke(UpdateAtisButton);
+        _workspace.Weather.Updated += (_, m) =>
+        {
+            _atisService.OnMetar(m);
+            _atis.Refresh(m.Station);
+        };
         _workspace.Weather.Enabled = _profile.FetchMetar;
         _workspace.Weather.Start();
 
@@ -303,6 +319,7 @@ public partial class MainWindow : Window
         if (_frameCount % 4 == 0)
         {
             ClockText.Text = DateTime.UtcNow.ToString("HH:mm:ss") + "Z";
+            CheckAtisLetters();
             AselText.Text = Radar.Selected?.Callsign ?? "—";
             TxText.Text = _session.Info is { } i ? "TX " + Frequency.Format(i.FrequencyKhz) : "";
             UpdateVoiceRadios();
@@ -997,6 +1014,7 @@ public partial class MainWindow : Window
         else if (!connected)
         {
             _voice.Stop();
+            _ = _atis.DisconnectAllAsync();
         }
         if (connected != _wasConnected) _sounds.Play(connected ? SoundEvent.Connected : SoundEvent.Disconnected);
         _wasConnected = connected;
@@ -1219,6 +1237,38 @@ public partial class MainWindow : Window
     }
 
     /// <summary>ПЛАГИНЫ: loaded Network-ATC plugins, their errors and the map layers taken from EuroScope plugins.</summary>
+    /// <summary>ATIS: the window of the controller's ATIS stations (it stays open while working).</summary>
+    private void OnAtisClick(object sender, RoutedEventArgs e)
+    {
+        if (_atisWindow is { IsLoaded: true })
+        {
+            _atisWindow.Activate();
+            return;
+        }
+        _atisWindow = new AtisWindow(_profile, _atis, SaveProfile) { Owner = this };
+        _atisWindow.Closed += (_, _) => _atisWindow = null;
+        _atisWindow.Show();
+    }
+
+    private void UpdateAtisButton()
+    {
+        int n = _atis.ConnectedCount;
+        AtisDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, n > 0 ? "SuccessBrush" : "MutedBrush");
+        AtisLabel.Text = n > 1 ? $"ATIS ×{n}" : "ATIS";
+        RefreshWeather();
+    }
+
+    /// <summary>Letters changed from anywhere (.atis, the runways window, a new METAR): the ATIS on the air speaks the new one.</summary>
+    private void CheckAtisLetters()
+    {
+        string now = string.Join(",", _profile.AtisLetters.OrderBy(kv => kv.Key).Select(kv => kv.Key + kv.Value));
+        if (now == _atisLettersSeen) return;
+        var before = _atisLettersSeen.Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+        _atisLettersSeen = now;
+        foreach (var entry in now.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(e => !before.Contains(e)))
+            _atis.Refresh(entry[..^1]);
+    }
+
     private void OnPluginsClick(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { PlacementTarget = PluginsButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
@@ -1454,6 +1504,8 @@ public partial class MainWindow : Window
         _plugins.ShutdownAll();
         _workspace.Dispose();
         _voice.Dispose();
+        // Off the UI thread: the ATIS logoffs must not wait for this (blocked) thread.
+        Task.Run(() => _atis.DisconnectAllAsync()).Wait(TimeSpan.FromSeconds(2));
         _session.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
     }
 }

@@ -10,6 +10,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- Windows voices for the spoken ATIS. -->
+    <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetworkAtc.Core\NetworkAtc.Core.csproj" />

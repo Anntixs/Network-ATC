@@ -31,6 +31,12 @@
               <TextBlock Text="РАДИО"/>
             </StackPanel>
           </Button>
+          <Button x:Name="AtisButton" Style="{StaticResource BarButton}" Click="OnAtisClick" ToolTip="Станции ATIS: текст для пилотов и голос в эфире">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse x:Name="AtisDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+              <TextBlock x:Name="AtisLabel" Text="ATIS"/>
+            </StackPanel>
+          </Button>
           <Button x:Name="PluginsButton" Content="ПЛАГИНЫ ▾" Style="{StaticResource BarButton}" Click="OnPluginsClick"
                   ToolTip="Плагины Network-ATC и данные плагинов EuroScope"/>
           <Button Content="НАСТРОЙКИ" Style="{StaticResource BarButton}" Click="OnSettingsClick"/>
