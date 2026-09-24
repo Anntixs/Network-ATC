@@ -2,7 +2,8 @@ name: Release
 
 # Builds a ready-to-run Network-ATC for Windows x64 (self-contained, no .NET install needed).
 #  - Every push to main, pull request and manual run: the package is attached to the run as an artifact.
-#  - Tags v*: the zip is also published as a GitHub Release.
+#  - Every run also builds the installer Network-ATC-Setup-<version>.exe (Inno Setup, installer/Network-ATC.iss).
+#  - Tags v*: the installer and the zip are published as a GitHub Release.
 on:
   workflow_dispatch:
   push:
@@ -50,14 +51,33 @@ jobs:
           if (-not (Test-Path publish/Network-ATC/Network-ATC.exe)) { throw "Network-ATC.exe missing" }
           Compress-Archive -Path publish/Network-ATC -DestinationPath "${{ steps.version.outputs.name }}.zip"
 
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc /Qp "/DAppVersion=${{ steps.version.outputs.version }}" "/DSourceDir=$PWD\publish\Network-ATC" "/DOutputDir=$PWD\dist" installer\Network-ATC.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "dist\Network-ATC-Setup-${{ steps.version.outputs.version }}.exe")) { throw "installer missing" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.version.outputs.name }}
           path: publish/Network-ATC
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Network-ATC-Setup-${{ steps.version.outputs.version }}
+          path: dist/Network-ATC-Setup-${{ steps.version.outputs.version }}.exe
+
       - name: GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.version.outputs.name }}.zip
+          files: |
+            dist/Network-ATC-Setup-${{ steps.version.outputs.version }}.exe
+            ${{ steps.version.outputs.name }}.zip
           generate_release_notes: true
