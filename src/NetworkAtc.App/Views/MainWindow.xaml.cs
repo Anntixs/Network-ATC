@@ -15,7 +15,9 @@ using NetworkAtc.Core.Radar;
 using NetworkAtc.Core.Sectors;
 using NetworkAtc.Core.Session;
 using NetworkAtc.Core.Tags;
+using NetworkAtc.Core.Voice;
 using NetworkAtc.Plugins;
+using SkyNetwork.Voice;
 using Track = NetworkAtc.Core.Radar.Track;
 using TagClickEventArgs = NetworkAtc.App.Radar.TagClickEventArgs;
 
@@ -82,6 +84,7 @@ public partial class MainWindow : Window
     private readonly CommandProcessor _commands;
     private readonly Workspace _workspace;
     private readonly SoundService _sounds;
+    private readonly VoiceService _voice;
     private bool _updatingPlan;
     private int _lastConflictCount;
     private bool _wasConnected;
@@ -117,11 +120,16 @@ public partial class MainWindow : Window
         _session.LocalCallsign = _profile.Station.Callsign;
         _session.ControllerInfo = () => _commands.ControllerInfoLines();
         _sounds = new SoundService(() => _profile.Sounds);
+        _voice = new VoiceService(Dispatcher, () => _profile.Voice);
+        _voice.Changed += OnVoiceChanged;
+        _voice.Message += (text, error) => { if (error) Error(text); else Info(text); };
+        _voice.ApplySettings();
 
         Radar.Profile = _profile;
         Radar.TagFields = _tagFields;
         Radar.Plugins = _registry;
         Radar.Tracks = () => _session.Tracks;
+        Radar.IsHeard = cs => _voice.Heard.Contains(cs);
         Radar.SelectionChanged += (_, t) => OnSelectionChanged(t);
         Radar.ViewChanged += (_, _) => UpdateViewInfo();
         Radar.TargetMenuRequested += (_, t) => ShowTargetMenu(t);
@@ -297,6 +305,7 @@ public partial class MainWindow : Window
             ClockText.Text = DateTime.UtcNow.ToString("HH:mm:ss") + "Z";
             AselText.Text = Radar.Selected?.Callsign ?? "—";
             TxText.Text = _session.Info is { } i ? "TX " + Frequency.Format(i.FrequencyKhz) : "";
+            UpdateVoiceRadios();
             RefreshLists();
             if (Radar.Selected is { } t && FlightPlanWindow.Visibility == Visibility.Visible) ShowPlanSummary(t);
         }
@@ -978,11 +987,91 @@ public partial class MainWindow : Window
         ConnectDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "SuccessBrush" : "DangerBrush");
         StationText.Text = connected && _session.Info is { } i ? $"{i.Callsign}  {Frequency.Format(i.FrequencyKhz)}" : "";
         if (!connected) AtcList.ItemsSource = null;
+        // Voice follows the network connection; its failures never break the network session.
+        if (connected && !_wasConnected && _session.Info is { } info)
+        {
+            UpdateVoiceRadios();
+            _voice.Start(info);
+        }
+        else if (!connected)
+        {
+            _voice.Stop();
+        }
         if (connected != _wasConnected) _sounds.Play(connected ? SoundEvent.Connected : SoundEvent.Disconnected);
         _wasConnected = connected;
         _workspace.UpdateOwnership();
         _dirty = true;
     }
+
+    // ---- radio voice ---------------------------------------------------------------------------------------
+
+    /// <summary>Radios from the primary and extra frequencies, antennas at the visibility centre (or the airport).</summary>
+    private void UpdateVoiceRadios()
+    {
+        if (_session.Info is not { } info) return;
+        var sites = VoicePlan.Sites([info.Center], VoicePlan.FallbackSite(Radar.Sector, _profile.ActiveAirports));
+        _voice.Update(VoicePlan.Radios(info.FrequencyKhz, VoicePlan.CanTransmit(info), _profile.Voice, sites.Count), sites);
+    }
+
+    private void OnVoiceChanged()
+    {
+        VoiceDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, _voice.State switch
+        {
+            VoiceState.Connected => "SuccessBrush",
+            VoiceState.Connecting => "AccentBrush",
+            _ => _voice.IsActive ? "DangerBrush" : "MutedBrush",
+        });
+        VoiceButton.ToolTip = _voice.State switch
+        {
+            VoiceState.Connected => $"Голосовая связь: подключено к {_voice.Server}",
+            VoiceState.Connecting => "Голосовая связь: подключение…",
+            _ when _voice.IsActive => "Голосовая связь: нет связи" + (_voice.LastError.Length > 0 ? " — " + _voice.LastError : ""),
+            _ => "Голосовая связь: частоты, тангента, аудио",
+        };
+        PttButton.Visibility = _voice.State == VoiceState.Connected ? Visibility.Visible : Visibility.Collapsed;
+        if (_voice.Transmitting)
+        {
+            TxBadge.SetResourceReference(Border.BackgroundProperty, "DangerBrush");
+            TxText.Foreground = Brushes.White;
+            TxText.FontWeight = FontWeights.Bold;
+        }
+        else
+        {
+            TxBadge.Background = Brushes.Transparent;
+            TxText.ClearValue(TextBlock.ForegroundProperty);
+            TxText.ClearValue(TextBlock.FontWeightProperty);
+        }
+        RxText.Text = _voice.Heard.Describe();
+        _dirty = true;
+    }
+
+    private void OnVoiceClick(object sender, RoutedEventArgs e)
+    {
+        int oldPort = _profile.Voice.Port;
+        var dialog = new VoiceWindow(_profile, _voice, _session.Info) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        SaveProfile();
+        _voice.ApplySettings();
+        UpdateVoiceRadios();
+        if (!_profile.Voice.Enabled) _voice.Stop();
+        else if (_session.IsConnected && _session.Info is { } info && (!_voice.IsActive || _profile.Voice.Port != oldPort)) _voice.Start(info);
+    }
+
+    private void OnPttDown(object sender, MouseButtonEventArgs e)
+    {
+        _voice.SetManualPtt(true);
+        PttButton.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnPttUp(object sender, MouseButtonEventArgs e)
+    {
+        _voice.SetManualPtt(false);
+        if (PttButton.IsMouseCaptured) PttButton.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void OnPttLost(object sender, MouseEventArgs e) => _voice.SetManualPtt(false);
 
     // ---- messages ----------------------------------------------------------------------------------------
 
@@ -1141,6 +1230,12 @@ public partial class MainWindow : Window
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         bool inText = Keyboard.FocusedElement is TextBox or PasswordBox;
+        // The push-to-talk key (polled by the voice library) runs no shortcut; in a text box a typing key still types.
+        if (PttKeys.Matches(PttBinding.Parse(_profile.Voice.PushToTalk), key))
+        {
+            if (!(inText && PttKeys.TypesText(key))) e.Handled = true;
+            return;
+        }
         string? action = null;
         foreach (var (name, gesture) in _profile.KeyBindings)
         {
@@ -1231,6 +1326,7 @@ public partial class MainWindow : Window
         SaveProfile();
         _plugins.ShutdownAll();
         _workspace.Dispose();
+        _voice.Dispose();
         _session.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
     }
 }
