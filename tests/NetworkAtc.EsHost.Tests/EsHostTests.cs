@@ -64,10 +64,10 @@ public class EsHostTests
     private static void Plan(AtcSession s, string cs, string dep, string dest, string route) =>
         s.OnPacket(null, FsdPacket.Parse($"$FP{cs}:*A:I:A320:450:{dep}:1200:0:FL350:{dest}:1:10:3:0:ULLO:/V/:{route}")!);
 
-    private static async Task Until(Func<bool> condition, string what)
+    private static async Task Until(Func<bool> condition, string what, Func<string>? details = null)
     {
         for (int i = 0; i < 1000 && !condition(); i++) await Task.Delay(10);
-        Assert.True(condition(), "timed out: " + what);
+        Assert.True(condition(), "timed out: " + what + (details == null ? "" : " — " + details()));
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class EsHostTests
 
         await bridge.StartAsync(Path.Combine(dir, "NetworkAtc.EsHost.exe"), settings);
         bridge.LoadPlugin(Path.Combine(dir, "TestPlugin.dll"));
-        await Until(() => bridge.Plugins.Any(p => p.Name == "Test Plugin"), "plugin loaded: " + string.Join("; ", logs));
+        await Until(() => bridge.Plugins.Any(p => p.Name == "Test Plugin"), "plugin loaded", () => { lock (logs) return string.Join("; ", logs); });
         Assert.Equal(["es:Test Plugin:1", "es:Test Plugin:2"], bridge.TagItems.Select(i => i.FieldKey));
         Assert.Equal([10, 12], bridge.TagFunctions.Select(f => f.Code));
         Assert.Contains(bridge.DisplayTypes, d => d.Name == "Test display" && !d.NeedRadarContent);

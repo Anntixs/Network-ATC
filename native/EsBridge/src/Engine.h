@@ -195,6 +195,7 @@ namespace natc
         void LoadSettings();
 
         HANDLE m_Pipe = nullptr;
+        bool PipeIo(bool write, uint8_t* data, DWORD length, DWORD& done);
         std::mutex m_WriteLock;
         int m_TimerCount = 0;
         int m_NextPluginId = 1;

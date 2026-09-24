@@ -162,8 +162,30 @@ namespace natc
         const auto& frame = w.Frame();
         std::lock_guard<std::mutex> lock(m_WriteLock);
         if (m_Pipe == nullptr) return;
-        DWORD written = 0;
-        WriteFile(m_Pipe, frame.data(), static_cast<DWORD>(frame.size()), &written, nullptr);
+        DWORD total = 0;
+        while (total < frame.size())
+        {
+            DWORD written = 0;
+            if (!PipeIo(true, const_cast<uint8_t*>(frame.data()) + total, static_cast<DWORD>(frame.size()) - total, written) || written == 0) return;
+            total += written;
+        }
+    }
+
+    // The pipe is opened for overlapped I/O: on a synchronous handle a pending read on the
+    // reader thread would block every write from the main thread.
+    bool Engine::PipeIo(bool write, uint8_t* data, DWORD length, DWORD& done)
+    {
+        OVERLAPPED ov{};
+        ov.hEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+        if (ov.hEvent == nullptr) return false;
+        BOOL ok = write ? WriteFile(m_Pipe, data, length, nullptr, &ov) : ReadFile(m_Pipe, data, length, nullptr, &ov);
+        bool result = true;
+        if (!ok && GetLastError() != ERROR_IO_PENDING)
+            result = false;
+        else
+            result = GetOverlappedResult(m_Pipe, &ov, &done, TRUE) != FALSE;
+        CloseHandle(ov.hEvent);
+        return result;
     }
 
     void Engine::Log(const std::string& text, bool error)
@@ -276,7 +298,7 @@ namespace natc
         std::string path = "\\\\.\\pipe\\" + pipeName;
         for (int attempt = 0; attempt < 100 && m_Pipe == nullptr; attempt++)
         {
-            HANDLE h = CreateFileA(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+            HANDLE h = CreateFileA(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
             if (h != INVALID_HANDLE_VALUE)
                 m_Pipe = h;
             else
@@ -301,7 +323,7 @@ namespace natc
                 DWORD got = 0, total = 0;
                 while (total < 4)
                 {
-                    if (!ReadFile(m_Pipe, reinterpret_cast<uint8_t*>(&length) + total, 4 - total, &got, nullptr) || got == 0) goto closed;
+                    if (!PipeIo(false, reinterpret_cast<uint8_t*>(&length) + total, 4 - total, got) || got == 0) goto closed;
                     total += got;
                 }
                 if (length > 256u * 1024 * 1024) goto closed;
@@ -309,7 +331,7 @@ namespace natc
                 total = 0;
                 while (total < length)
                 {
-                    if (!ReadFile(m_Pipe, frame.data() + total, length - total, &got, nullptr) || got == 0) goto closed;
+                    if (!PipeIo(false, frame.data() + total, length - total, got) || got == 0) goto closed;
                     total += got;
                 }
                 {
