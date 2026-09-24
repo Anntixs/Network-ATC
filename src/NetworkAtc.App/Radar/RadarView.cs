@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using NetworkAtc.App.Services;
 using NetworkAtc.Core.Customization;
+using NetworkAtc.Core.EsPlugins;
 using NetworkAtc.Core.Geo;
 using NetworkAtc.Core.Plugins;
 using NetworkAtc.Core.Radar;
@@ -52,6 +53,8 @@ public sealed class RadarView : FrameworkElement
     private Anchor? _measureStart;
     private Point _rightDown;
     private readonly Dictionary<string, TagTemplate> _templates = [];
+    private (EsScreenObject Object, Point Start, int Button, bool Moved)? _objectPress;
+    private EsScreenObject? _overObject;
 
     public RadarView()
     {
@@ -83,6 +86,23 @@ public sealed class RadarView : FrameworkElement
     public event EventHandler<Track>? TargetMenuRequested;
     /// <summary>Click on a tag (Field is null when the click was not on a field).</summary>
     public event EventHandler<TagClickEventArgs>? TagClicked;
+    /// <summary>
+    /// Mouse on an object a EuroScope plugin put on the screen: kind 0 over, 1 down, 2 up, 3 click, 4 double click,
+    /// 5 move; the last value is the button (1 left, 2 middle, 3 right) or, for a move, 1 when the button was released.
+    /// </summary>
+    public event Action<EsScreenObject, int, Point, int>? ScreenObjectMouse;
+
+    /// <summary>What the EuroScope plugins drew on this screen: under the tags, over them, and their clickable objects.</summary>
+    public PluginDrawing? EsDrawing { get; set; }
+    /// <summary>A plugin display that draws everything itself: the sector and traffic of Network-ATC are not drawn.</summary>
+    public bool HideOwnContent { get; set; }
+    /// <summary>Color of a tag field chosen by its plugin (field key, callsign), or null for the tag color.</summary>
+    public Func<string, string, string?>? FieldColor { get; set; }
+
+    /// <summary>The projection centre and the view centre on its plane (NM): what the plugin host needs to draw like us.</summary>
+    public (GeoPoint ProjectionCenter, double Cx, double Cy) Geometry => (_projection.Center, _cx, _cy);
+    public GeoPoint GeoAt(Point p) => ToGeo(p);
+    public Point ScreenAt(GeoPoint p) => ToScreen(p);
 
     public double NmPerPixel => _nmPerPixel;
     public GeoPoint ViewCenter => _projection.FromPlane(_cx, _cy);
@@ -148,12 +168,25 @@ public sealed class RadarView : FrameworkElement
         var theme = Profile.Theme;
         dc.DrawRectangle(Paint.Brush(theme.RadarBackground), null, new Rect(0, 0, ActualWidth, ActualHeight));
         _tagTypeface = new Typeface(Profile.Tags.FontFamily.Split(',')[0].Trim());
+        var drawing = EsDrawing;
+        var full = new Rect(0, 0, ActualWidth, ActualHeight);
+        if (HideOwnContent)
+        {
+            _tagBounds.Clear();
+            _fieldZones.Clear();
+            _targetPoints.Clear();
+            if (drawing?.Back is { } onlyBack) dc.DrawImage(onlyBack, full);
+            if (drawing?.Front is { } onlyFront) dc.DrawImage(onlyFront, full);
+            return;
+        }
         if (Profile.IsLayerVisible("RANGE RINGS")) DrawRangeRings(dc, theme);
         if (Sector != null) DrawSector(dc, Sector, theme);
         if (Sector != null && Profile.IsLayerVisible("CENTERLINES")) DrawCenterlines(dc, Sector, theme);
+        if (drawing?.Back is { } back) dc.DrawImage(back, full);
         DrawOverlays(dc);
         DrawRoutes(dc, theme);
         DrawTraffic(dc, theme);
+        if (drawing?.Front is { } front) dc.DrawImage(front, full);
         DrawMeasures(dc, theme);
         DrawScaleBar(dc, theme);
     }
@@ -532,7 +565,13 @@ public sealed class RadarView : FrameworkElement
             new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size, b, dip);
 
         // Measure every span so each field gets its own clickable rectangle.
-        var measured = lines.Select(line => line.Select(span => (Span: span, Text: MeasureText(span.Text, span.Field == "warn" ? warningBrush : brush))).ToList()).ToList();
+        Brush SpanBrush(TagSpan span)
+        {
+            if (span.Field == "warn") return warningBrush;
+            if (span.Field != null && !alert && FieldColor?.Invoke(span.Field, t.Callsign) is { } own) return Paint.Brush(own);
+            return brush;
+        }
+        var measured = lines.Select(line => line.Select(span => (Span: span, Text: MeasureText(span.Text, SpanBrush(span)))).ToList()).ToList();
         double width = measured.Max(line => line.Sum(x => x.Text.WidthIncludingTrailingWhitespace));
         var warningText = warning.Length > 0 ? MeasureText(warning, warningBrush) : null;
         if (warningText != null) width = Math.Max(width, warningText.WidthIncludingTrailingWhitespace);
@@ -618,6 +657,39 @@ public sealed class RadarView : FrameworkElement
 
     // ---- input ---------------------------------------------------------------------------------
 
+    /// <summary>The topmost plugin object under the point (the last one added is on top).</summary>
+    private EsScreenObject? HitObject(Point p)
+    {
+        if (EsDrawing is not { } d) return null;
+        for (int i = d.Objects.Count - 1; i >= 0; i--)
+        {
+            var a = d.Objects[i].Area;
+            if (p.X >= a.Left && p.X < a.Right && p.Y >= a.Top && p.Y < a.Bottom) return d.Objects[i];
+        }
+        return null;
+    }
+
+    private bool PressObject(Point p, int button, int clickCount)
+    {
+        if (HitObject(p) is not { } o) return false;
+        _objectPress = (o, p, button, false);
+        ScreenObjectMouse?.Invoke(o, 1, p, button);
+        if (clickCount == 2) ScreenObjectMouse?.Invoke(o, 4, p, button);
+        CaptureMouse();
+        return true;
+    }
+
+    private bool ReleaseObject(Point p, int button)
+    {
+        if (_objectPress is not { } press || press.Button != button) return false;
+        _objectPress = null;
+        ReleaseMouseCapture();
+        ScreenObjectMouse?.Invoke(press.Object, 2, p, button);
+        if (press.Moved) ScreenObjectMouse?.Invoke(press.Object, 5, p, 1);
+        else ScreenObjectMouse?.Invoke(press.Object, 3, p, button);
+        return true;
+    }
+
     /// <summary>The topmost tag under the point.</summary>
     private string? HitTag(Point p)
     {
@@ -676,6 +748,7 @@ public sealed class RadarView : FrameworkElement
     {
         Focus();
         var p = e.GetPosition(this);
+        if (PressObject(p, 1, e.ClickCount)) return;
         var tag = HitTag(p);
         if (tag != null)
         {
@@ -699,6 +772,19 @@ public sealed class RadarView : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         _mouse = e.GetPosition(this);
+        if (_objectPress is { } press)
+        {
+            if (press.Object.Moveable && ((_mouse - press.Start).Length > 2 || press.Moved))
+            {
+                _objectPress = press with { Moved = true };
+                ScreenObjectMouse?.Invoke(press.Object, 5, _mouse, 0);
+            }
+            return;
+        }
+        var over = HitObject(_mouse);
+        if (over != null && (over.ObjectType, over.ObjectId) != (_overObject?.ObjectType, _overObject?.ObjectId))
+            ScreenObjectMouse?.Invoke(over, 0, _mouse, 0);
+        _overObject = over;
         if (_measureStart != null)
         {
             InvalidateVisual();
@@ -740,6 +826,7 @@ public sealed class RadarView : FrameworkElement
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        if (ReleaseObject(e.GetPosition(this), 1)) return;
         if (_pendingTagClick is { } click && FindTrack(click.Callsign) is { } clicked)
             TagClicked?.Invoke(this, new TagClickEventArgs(clicked, click.Field, false, e.GetPosition(this)));
         _pendingTagClick = null;
@@ -753,6 +840,11 @@ public sealed class RadarView : FrameworkElement
     {
         var p = e.GetPosition(this);
         _rightDown = p;
+        if (PressObject(p, 3, e.ClickCount))
+        {
+            e.Handled = true;
+            return;
+        }
         if (HitTag(p) == null)
         {
             // Right-drag measures distance and bearing; from a target the line follows the aircraft.
@@ -765,6 +857,11 @@ public sealed class RadarView : FrameworkElement
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         var p = e.GetPosition(this);
+        if (ReleaseObject(p, 3))
+        {
+            e.Handled = true;
+            return;
+        }
         if (_measureStart is { } start)
         {
             _measureStart = null;
@@ -794,6 +891,11 @@ public sealed class RadarView : FrameworkElement
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Middle && PressObject(e.GetPosition(this), 2, e.ClickCount))
+        {
+            e.Handled = true;
+            return;
+        }
         // Middle button resets a dragged tag to the default position.
         if (e.ChangedButton == MouseButton.Middle && HitTag(e.GetPosition(this)) is { } tag)
         {
@@ -801,6 +903,18 @@ public sealed class RadarView : FrameworkElement
             InvalidateVisual();
         }
         base.OnMouseDown(e);
+    }
+
+    protected override void OnMouseUp(MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Middle && ReleaseObject(e.GetPosition(this), 2)) e.Handled = true;
+        base.OnMouseUp(e);
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        ViewChanged?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnMouseLeave(MouseEventArgs e)
@@ -820,3 +934,6 @@ public sealed class TagClickEventArgs(Track track, string? field, bool right, Po
     /// <summary>Click position relative to the radar view.</summary>
     public Point Position { get; } = position;
 }
+
+/// <summary>A picture of the EuroScope plugins' drawing, split around the tags, and the objects they made clickable.</summary>
+public sealed record PluginDrawing(ImageSource? Back, ImageSource? Front, IReadOnlyList<EsScreenObject> Objects);

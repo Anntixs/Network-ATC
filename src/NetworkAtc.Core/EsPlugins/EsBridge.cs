@@ -349,11 +349,13 @@ public sealed class EsBridge : IAsyncDisposable
     }
 
     private SectorFile? _sector;
+    private string _sectorFileName = "";
 
     /// <summary>Sends the sector file elements (and the active airports and runways) to the plugins.</summary>
     public void SendSector(SectorFile? sector, string fileName)
     {
         _sector = sector;
+        _sectorFileName = fileName;
         if (!IsRunning) return;
         Send(new EsWriter(EsMsg.SectorReset).Str(fileName));
         if (sector != null)
@@ -362,7 +364,7 @@ public sealed class EsBridge : IAsyncDisposable
     }
 
     /// <summary>Only the runway activity changed.</summary>
-    public void SendRunways() => SendSector(_sector, _sector?.Name ?? "");
+    public void SendRunways() => SendSector(_sector, _sectorFileName);
 
     private static EsWriter Element(int type, string name, string airport, double frequency, IEnumerable<GeoPoint> points, IEnumerable<string> components,
         string rwy1 = "", string rwy2 = "", int hdg1 = 0, int hdg2 = 0, bool dep1 = false, bool arr1 = false, bool dep2 = false, bool arr2 = false)

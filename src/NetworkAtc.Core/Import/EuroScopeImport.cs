@@ -397,6 +397,7 @@ public static class EuroScopeImport
         var maps = new MapLayerBuilder(result.Maps, MapLayerBuilder.PointsOf(result.Sector));
         var visibility = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         result.Profile.ImportedPlugins = [];
+        result.Profile.EsPlugins = [];
         foreach (var plugin in prf.Plugins)
         {
             var segments = plugin.Path.Split(new[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
@@ -409,11 +410,18 @@ public static class EuroScopeImport
             if (lower.StartsWith("topsky")) ImportTopSky(dir, maps, visibility, report);
             else if (lower.StartsWith("grplugin")) ImportGroundRadar(dir, maps, visibility, report);
             else if (lower.StartsWith("ccams")) ImportCcams(dir, result.Profile, report);
-            else report.Skip($"Плагин {file} не поддерживается");
+            // The DLL itself runs in the plugin host; the data files above also give our own maps and codes.
+            bool runs = dll.Length > 0 && File.Exists(dll);
+            if (runs)
+            {
+                result.Profile.EsPlugins.Add(dll);
+                report.Ok($"Плагин {file}: будет запущен");
+            }
+            else report.Skip($"Плагин {file}: DLL не найдена");
             result.Profile.ImportedPlugins.Add(lower.StartsWith("topsky") ? $"{file}: карты и зоны"
                 : lower.StartsWith("grplugin") ? $"{file}: стоянки и карты"
                 : lower.StartsWith("ccams") ? $"{file}: диапазон кодов"
-                : $"{file}: не поддерживается");
+                : runs ? $"{file}: запускается" : $"{file}: DLL не найдена");
         }
         foreach (var (layer, visible) in visibility) result.Profile.Layers[layer] = visible;
         if (maps.UnknownPoints.Count > 0)

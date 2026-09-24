@@ -89,11 +89,15 @@ public partial class SettingsWindow : Window
 
     public Profile Result { get; }
 
-    public SettingsWindow(Profile profile, TagFields fields, PluginManager plugins, DpapiProtector protector)
+    private readonly IReadOnlyList<(string Id, string Title)> _extraActions;
+
+    public SettingsWindow(Profile profile, TagFields fields, PluginManager plugins, DpapiProtector protector,
+        IReadOnlyList<(string Id, string Title)>? extraActions = null)
     {
         InitializeComponent();
         Result = profile;
         _fields = fields;
+        _extraActions = extraActions ?? [];
         DataContext = profile;
 
         PresetBox.ItemsSource = Theme.BuiltIn;
@@ -126,7 +130,7 @@ public partial class SettingsWindow : Window
 
     private void LoadClicks(IReadOnlyDictionary<string, TagClickBinding> bindings)
     {
-        var actions = TagActions.All.Select(a => new ActionOption(a.Id, a.Title)).ToList();
+        var actions = TagActions.All.Concat(_extraActions).Select(a => new ActionOption(a.Id, a.Title)).ToList();
         var profile = new Profile { TagClicks = new(bindings, StringComparer.OrdinalIgnoreCase) };
         ClickList.ItemsSource = _fields.All.Select(f =>
         {

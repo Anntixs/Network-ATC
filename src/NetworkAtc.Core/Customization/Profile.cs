@@ -199,6 +199,12 @@ public sealed class Profile
     public List<RecentSector> RecentSectors { get; set; } = [];
     /// <summary>EuroScope plugins of the last imported .prf and what became of each (shown in the ПЛАГИНЫ menu).</summary>
     public List<string> ImportedPlugins { get; set; } = [];
+    /// <summary>EuroScope plugin DLLs loaded into the plugin host at start, in load order.</summary>
+    public List<string> EsPlugins { get; set; } = [];
+    /// <summary>EuroScope display type of the radar screen: "" is the standard radar, else a plugin's display.</summary>
+    public string EsDisplayType { get; set; } = "";
+    /// <summary>Data the plugins saved into the display (the ASR of EuroScope), name → value.</summary>
+    public Dictionary<string, string> EsDisplayData { get; set; } = [];
     public bool ShowSectorSelection { get; set; } = true;
 
     public static Dictionary<string, WindowLayout> DefaultWindows() => new(StringComparer.OrdinalIgnoreCase)
@@ -350,6 +356,9 @@ public sealed class Profile
                 foreach (var (k, v) in DefaultWindows()) p.Windows.TryAdd(k, v);
                 p.ActiveAirports ??= [];
                 p.RecentSectors ??= [];
+                p.EsPlugins ??= [];
+                p.EsDisplayType ??= "";
+                p.EsDisplayData ??= [];
                 if (p.Version < 2)
                 {
                     // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).

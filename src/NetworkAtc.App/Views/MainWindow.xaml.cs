@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using NetworkAtc.App.Controls;
 using NetworkAtc.App.Services;
 using NetworkAtc.Core.Customization;
+using NetworkAtc.Core.EsPlugins;
 using NetworkAtc.Core.Fsd;
 using NetworkAtc.Core.Plugins;
 using NetworkAtc.Core.Radar;
@@ -134,8 +135,8 @@ public partial class MainWindow : Window
         Radar.Plugins = _registry;
         Radar.Tracks = () => _session.Tracks;
         Radar.IsHeard = cs => _voice.Heard.Contains(cs);
-        Radar.SelectionChanged += (_, t) => OnSelectionChanged(t);
-        Radar.ViewChanged += (_, _) => UpdateViewInfo();
+        Radar.SelectionChanged += (_, t) => { OnSelectionChanged(t); _es?.SetAsel(t?.Callsign ?? ""); };
+        Radar.ViewChanged += (_, _) => { UpdateViewInfo(); _esGeometryDirty = true; };
         Radar.TargetMenuRequested += (_, t) => ShowTargetMenu(t);
         Radar.TagClicked += (_, e) => OnTagClicked(e);
 
@@ -146,7 +147,11 @@ public partial class MainWindow : Window
             _dirty = true;
         });
         _session.FlightPlanUpdated += (_, t) => Dispatcher.BeginInvoke(() => { if (ReferenceEquals(t, Radar.Selected)) ShowPlan(t); });
-        _session.MessageReceived += (_, m) => Dispatcher.BeginInvoke(() => OnMessage(m));
+        _session.MessageReceived += (_, m) => Dispatcher.BeginInvoke(() =>
+        {
+            OnMessage(m);
+            ForwardChatToEsPlugins(m);
+        });
         _session.ControllersChanged += (_, _) => Dispatcher.BeginInvoke(RefreshControllers);
         _session.ConnectionChanged += (_, c) => Dispatcher.BeginInvoke(() => UpdateConnectionState(c));
         _registry.Log += (_, text) => Dispatcher.BeginInvoke(() => AddLine("Радио", "плагин", text, _profile.Theme.MutedText));
@@ -165,6 +170,7 @@ public partial class MainWindow : Window
         _atis.Changed += () => Dispatcher.BeginInvoke(UpdateAtisButton);
         _workspace.Weather.Updated += (_, m) =>
         {
+            _es?.Metar(m.Station, m.Raw);
             _atisService.OnMetar(m);
             _atis.Refresh(m.Station);
         };
@@ -175,6 +181,7 @@ public partial class MainWindow : Window
         ApplyProfile();
         LoadSector(sectorPath);
         LoadPlugins();
+        StartEsPlugins();
         BuildLayerList();
         UpdateConnectionState(false);
 
@@ -219,6 +226,7 @@ public partial class MainWindow : Window
             Radar.SetSector(sector);
             _workspace.SetSector(sector);
             _sectorPath = path;
+            _es?.SendSector(sector, path);
             _commands.DemoCenter = sector.Center;
             if (sameAsLastTime && _profile.ViewCenterLatitude != 0)
                 Radar.SetView(new GeoPoint(_profile.ViewCenterLatitude, _profile.ViewCenterLongitude), _profile.ViewNmPerPixel);
@@ -307,6 +315,7 @@ public partial class MainWindow : Window
     private void OnFrame()
     {
         _frameCount++;
+        PumpEsPlugins();
         if (Radar.NeedsAnimation) _dirty = true;
         if (_dirty)
         {
@@ -710,11 +719,23 @@ public partial class MainWindow : Window
     private void OnTagClicked(TagClickEventArgs e)
     {
         var t = e.Track;
-        bool pluginHandles = e.Field != null && _registry.TagClicks.ContainsKey(e.Field);
+        bool pluginHandles = e.Field != null && (_registry.TagClicks.ContainsKey(e.Field) || EsBridge.ParseKey(e.Field, "es:") != null);
         string action = _profile.ResolveTagClick(e.Field, e.Right, pluginHandles);
         if (action == TagActions.None) return;
         Radar.Select(t);
+        RunTagAction(t, action, e.Position, e.Right, e.Field);
+    }
 
+    /// <summary>A tag action on an aircraft: from a tag click, a plugin list or a EuroScope plugin function.</summary>
+    private void RunTagAction(Track t, string action, Point position, bool right, string? field)
+    {
+        var e = (Position: position, Right: right, Field: field);
+        if (action.StartsWith(EsFunctionPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            CallEsFunction(action, t, field, position);
+            _dirty = true;
+            return;
+        }
         switch (action)
         {
             case TagActions.ToggleTrack:
@@ -790,6 +811,9 @@ public partial class MainWindow : Window
             case TagActions.Plugin when e.Field != null && _registry.TagClicks.TryGetValue(e.Field, out var handler):
                 try { handler.Handler(t, e.Right); }
                 catch (Exception ex) { Error($"{handler.Owner}: {ex.Message}"); }
+                break;
+            case TagActions.Select:
+                Radar.Select(t);
                 break;
         }
         _dirty = true;
@@ -1180,6 +1204,8 @@ public partial class MainWindow : Window
                 await _session.SendPrivateAsync(_activeChat, _commands.ExpandAlias(line));
                 return;
             }
+            // EuroScope plugins see a command first, as in EuroScope.
+            if (line.StartsWith('.') && _es != null && await _es.CommandAsync(line)) return;
             var feedback = await _commands.ExecuteAsync(line);
             if (feedback != null) Info(feedback);
         }
@@ -1285,6 +1311,7 @@ public partial class MainWindow : Window
             foreach (var name in _profile.ImportedPlugins)
                 menu.Items.Add(new MenuItem { Header = "    " + name, IsEnabled = false });
         }
+        AddEsPluginMenu(menu);
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuEntry("Открыть папку плагинов", () =>
         {
@@ -1326,6 +1353,7 @@ public partial class MainWindow : Window
         ApplyProfile();
         LoadSector(_profile.SectorFile);
         SaveProfile();
+        LoadImportedEsPlugins();
         _dirty = true;
         Info($"Профиль EuroScope «{result.Source.Name}» импортирован: {result.Report.Imported.Count()} импортировано, " +
              $"{result.Report.Skipped.Count()} пропущено, {result.Report.Warnings.Count()} предупреждений");
@@ -1377,6 +1405,7 @@ public partial class MainWindow : Window
         var dialog = new RunwaysWindow(_profile, Radar.Sector) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         SaveProfile();
+        _es?.SendRunways();
         RefreshWeather();
         _ = _workspace.Weather.RefreshAsync();
         _dirty = true;
@@ -1386,7 +1415,7 @@ public partial class MainWindow : Window
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         SaveProfile();
-        var dialog = new SettingsWindow(_profile.Clone(), _tagFields, _plugins, _protector) { Owner = this };
+        var dialog = new SettingsWindow(_profile.Clone(), _tagFields, _plugins, _protector, EsFunctionActions().ToList()) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         _profile = dialog.Result;
         Radar.Profile = _profile;
@@ -1398,6 +1427,8 @@ public partial class MainWindow : Window
         _workspace.Weather.Enabled = _profile.FetchMetar;
         _workspace.UpdateOwnership();
         RefreshWeather();
+        UpdateEsItemsInUse();
+        _esGeometryDirty = true;
         SaveProfile();
     }
 
@@ -1501,6 +1532,7 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender, CancelEventArgs e)
     {
         SaveProfile();
+        StopEsPlugins();
         _plugins.ShutdownAll();
         _workspace.Dispose();
         _voice.Dispose();

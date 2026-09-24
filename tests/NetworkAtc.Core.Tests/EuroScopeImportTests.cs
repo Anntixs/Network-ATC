@@ -399,7 +399,9 @@ public class EuroScopeImportTests
         Assert.Contains(result.Report.Imported, s => s.Contains("UUEE (2)") && s.Contains("UUDD (1)"));
 
         Assert.Equal("4201-4277", result.Profile.SquawkRange);
-        Assert.Contains(result.Report.Skipped, s => s == "Плагин AmanPlugin.dll не поддерживается");
+        // Every plugin DLL found runs in the plugin host, in the .prf order.
+        Assert.Equal(["TopSky.dll", "GRplugin.dll", "AmanPlugin.dll", "CCAMS.dll"], result.Profile.EsPlugins.Select(Path.GetFileName));
+        Assert.Contains(result.Report.Imported, s => s == "Плагин AmanPlugin.dll: будет запущен");
     }
 
     [Fact]
