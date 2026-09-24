@@ -86,8 +86,9 @@ public class SectorTests
         Assert.Equal(5, s.Positions.Count);
         Assert.Equal(("UUEE_TWR", "131.500"), (s.Positions[2].Callsign, s.Positions[2].Frequency));
         Assert.Single(s.FreeTexts);
-        Assert.Equal(2, s.SectorLines.Count);
-        var tma = Assert.Single(s.Sectors);
+        Assert.Equal(4, s.SectorLines.Count);
+        Assert.Equal(2, s.Sectors.Count);
+        var tma = s.Sectors[0];
         Assert.Equal(("UUEE_TMA", 0, 9500), (tma.Name, tma.Floor, tma.Ceiling));
         Assert.Equal(["EA", "DC"], tma.Owners);
     }

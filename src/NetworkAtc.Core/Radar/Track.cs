@@ -42,7 +42,40 @@ public sealed class Track(string callsign) : IAircraft
     public int? AssignedSpeed { get; set; }
     public int? AssignedSquawk { get; set; }
     public string Scratchpad { get; set; } = "";
+    /// <summary>True when this controller owns the track (see <see cref="Owner"/>).</summary>
     public bool IsTracked { get; set; }
+
+    // ---- coordination (shared with other controllers) ----
+
+    /// <summary>Callsign of the controller that has the aircraft assumed, or "".</summary>
+    public string Owner { get; set; } = "";
+    /// <summary>Pending transfer of control: from whom and to whom; both "" when none.</summary>
+    public string HandoffFrom { get; set; } = "";
+    public string HandoffTo { get; set; } = "";
+    public bool HandoffPending => HandoffTo.Length > 0;
+    /// <summary>Assigned SID/STAR and runways; "" means "use the automatic choice".</summary>
+    public string Sid { get; set; } = "";
+    public string Star { get; set; } = "";
+    public string DepartureRunway { get; set; } = "";
+    public string ArrivalRunway { get; set; } = "";
+    /// <summary>The "clearance received" flag of the departure list.</summary>
+    public bool ClearanceReceived { get; set; }
+    /// <summary>Ground state set by the controller: "", PUSH, TAXI, DEPA.</summary>
+    public string GroundState { get; set; } = "";
+
+    // ---- display (local) ----
+
+    public bool ShowRoute { get; set; }
+    /// <summary>Radius of the separation halo around the target, NM; null = none.</summary>
+    public double? HaloNm { get; set; }
+
+    /// <summary>The flight plan exactly as filed or last amended.</summary>
+    public FiledPlan? Plan { get; private set; }
+
+    /// <summary>Voice capability from the remarks: "" voice, "R" receive only, "T" text only.</summary>
+    public string CommType =>
+        Remarks.Contains("/T/", StringComparison.OrdinalIgnoreCase) ? "T"
+        : Remarks.Contains("/R/", StringComparison.OrdinalIgnoreCase) ? "R" : "";
 
     /// <summary>Color set by a plugin, or null.</summary>
     public string? Highlight { get; set; }
@@ -80,6 +113,7 @@ public sealed class Track(string callsign) : IAircraft
     public void ApplyFlightPlan(FiledPlan fp)
     {
         HasFlightPlan = true;
+        Plan = fp;
         Rules = fp.Rules;
         if (fp.AircraftType.Length > 0) AircraftType = fp.AircraftType;
         Departure = fp.Departure;

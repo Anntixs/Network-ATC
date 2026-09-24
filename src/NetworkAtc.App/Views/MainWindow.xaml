@@ -21,6 +21,7 @@
           <Button Content="СЕКТОР" Style="{StaticResource MenuButton}" Click="OnOpenSectorClick" ToolTip="Выбор сектора (Ctrl+O)"/>
           <ToggleButton x:Name="LayersButton" Content="КАРТЫ" Style="{StaticResource MenuToggle}" Click="OnLayersClick" ToolTip="Слои карты (F6)"/>
           <Button x:Name="ListsButton" Content="СПИСКИ ▾" Style="{StaticResource MenuButton}" Click="OnListsClick"/>
+          <Button Content="ВПП" Style="{StaticResource MenuButton}" Click="OnRunwaysClick" ToolTip="Активные аэродромы, ВПП и ATIS (Ctrl+R)"/>
           <Button Content="НАСТРОЙКИ" Style="{StaticResource MenuButton}" Click="OnSettingsClick"/>
           <Border Width="1" Margin="10,8" Background="{DynamicResource BorderBrush}"/>
           <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource MenuButton}">
@@ -32,6 +33,24 @@
           <TextBlock x:Name="StationText" Text="" Style="{StaticResource Muted}" Margin="8,0,0,0" FontFamily="{StaticResource MonoFont}"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+          <ItemsControl x:Name="WeatherStrip" VerticalAlignment="Center" Margin="0,0,10,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Background="{DynamicResource HoverBrush}" CornerRadius="3" Padding="7,2" Margin="0,0,6,0" ToolTip="{Binding Raw}">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Station}" FontWeight="SemiBold" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding Atis}" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding Summary}" FontFamily="{StaticResource MonoFont}" Style="{StaticResource Muted}"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
           <TextBlock x:Name="SectorText" Text="Нет сектора" Style="{StaticResource Muted}" Margin="0,0,16,0"/>
           <TextBlock x:Name="RangeText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,16,0"/>
           <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold"/>
@@ -49,30 +68,37 @@
           <DockPanel>
             <Grid DockPanel.Dock="Top" Margin="8,0,8,3">
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="80"/><ColumnDefinition Width="44"/><ColumnDefinition Width="46"/>
-                <ColumnDefinition Width="54"/><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="76"/><ColumnDefinition Width="42"/><ColumnDefinition Width="44"/><ColumnDefinition Width="60"/>
+                <ColumnDefinition Width="36"/><ColumnDefinition Width="48"/><ColumnDefinition Width="40"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/>
               </Grid.ColumnDefinitions>
               <TextBlock Text="ПОЗЫВНОЙ" Style="{StaticResource ColumnHeader}"/>
               <TextBlock Grid.Column="1" Text="ТИП" Style="{StaticResource ColumnHeader}"/>
               <TextBlock Grid.Column="2" Text="НАЗН" Style="{StaticResource ColumnHeader}"/>
-              <TextBlock Grid.Column="3" Text="RFL" Style="{StaticResource ColumnHeader}"/>
-              <TextBlock Grid.Column="4" Text="КОД" Style="{StaticResource ColumnHeader}"/>
-              <TextBlock Grid.Column="5" Text="СТАТУС" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="3" Text="SID" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="4" Text="ВПП" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="5" Text="RFL" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="6" Text="КОД" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="7" Text="CLR" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="8" Text="СТАТУС" Style="{StaticResource ColumnHeader}"/>
             </Grid>
             <ListBox x:Name="DepartureList" FontFamily="{StaticResource MonoFont}" FontSize="12" SelectionChanged="OnListSelected">
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <Grid>
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="80"/><ColumnDefinition Width="44"/><ColumnDefinition Width="46"/>
-                      <ColumnDefinition Width="54"/><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="76"/><ColumnDefinition Width="42"/><ColumnDefinition Width="44"/><ColumnDefinition Width="60"/>
+                      <ColumnDefinition Width="36"/><ColumnDefinition Width="48"/><ColumnDefinition Width="40"/><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Callsign}" FontWeight="SemiBold"/>
                     <TextBlock Grid.Column="1" Text="{Binding Type}"/>
                     <TextBlock Grid.Column="2" Text="{Binding Destination}"/>
-                    <TextBlock Grid.Column="3" Text="{Binding Rfl}"/>
-                    <TextBlock Grid.Column="4" Text="{Binding Squawk}"/>
-                    <TextBlock Grid.Column="5" Text="{Binding Status}" Style="{StaticResource Muted}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Sid}" Foreground="{DynamicResource AccentBrush}"/>
+                    <TextBlock Grid.Column="4" Text="{Binding Runway}"/>
+                    <TextBlock Grid.Column="5" Text="{Binding Rfl}"/>
+                    <TextBlock Grid.Column="6" Text="{Binding Squawk}"/>
+                    <Button Grid.Column="7" Content="{Binding Clearance}" Tag="{Binding Track}" Style="{StaticResource Ghost}" Padding="4,0"
+                            Click="OnClearanceClick" ToolTip="Разрешение получено"/>
+                    <TextBlock Grid.Column="8" Text="{Binding Status}" Style="{StaticResource Muted}"/>
                   </Grid>
                 </DataTemplate>
               </ListBox.ItemTemplate>
@@ -84,35 +110,77 @@
           <DockPanel>
             <Grid DockPanel.Dock="Top" Margin="8,0,8,3">
               <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="80"/><ColumnDefinition Width="44"/><ColumnDefinition Width="46"/>
-                <ColumnDefinition Width="46"/><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="76"/><ColumnDefinition Width="42"/><ColumnDefinition Width="46"/><ColumnDefinition Width="60"/>
+                <ColumnDefinition Width="36"/><ColumnDefinition Width="54"/><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/>
               </Grid.ColumnDefinitions>
               <TextBlock Text="ПОЗЫВНОЙ" Style="{StaticResource ColumnHeader}"/>
               <TextBlock Grid.Column="1" Text="ТИП" Style="{StaticResource ColumnHeader}"/>
               <TextBlock Grid.Column="2" Text="ОТКУДА" Style="{StaticResource ColumnHeader}"/>
-              <TextBlock Grid.Column="3" Text="КУДА" Style="{StaticResource ColumnHeader}"/>
-              <TextBlock Grid.Column="4" Text="NM" Style="{StaticResource ColumnHeader}"/>
-              <TextBlock Grid.Column="5" Text="ETA" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="3" Text="STAR" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="4" Text="ВПП" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="5" Text="ЭШЕЛОН" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="6" Text="NM" Style="{StaticResource ColumnHeader}"/>
+              <TextBlock Grid.Column="7" Text="ETA" Style="{StaticResource ColumnHeader}"/>
             </Grid>
             <ListBox x:Name="ArrivalList" FontFamily="{StaticResource MonoFont}" FontSize="12" SelectionChanged="OnListSelected">
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <Grid>
                     <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="80"/><ColumnDefinition Width="44"/><ColumnDefinition Width="46"/>
-                      <ColumnDefinition Width="46"/><ColumnDefinition Width="54"/><ColumnDefinition Width="*"/>
+                      <ColumnDefinition Width="76"/><ColumnDefinition Width="42"/><ColumnDefinition Width="46"/><ColumnDefinition Width="60"/>
+                      <ColumnDefinition Width="36"/><ColumnDefinition Width="54"/><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding Callsign}" FontWeight="SemiBold"/>
                     <TextBlock Grid.Column="1" Text="{Binding Type}"/>
                     <TextBlock Grid.Column="2" Text="{Binding Departure}"/>
-                    <TextBlock Grid.Column="3" Text="{Binding Destination}"/>
-                    <TextBlock Grid.Column="4" Text="{Binding Distance}"/>
-                    <TextBlock Grid.Column="5" Text="{Binding Eta}" Style="{StaticResource Muted}"/>
+                    <TextBlock Grid.Column="3" Text="{Binding Star}" Foreground="{DynamicResource AccentBrush}"/>
+                    <TextBlock Grid.Column="4" Text="{Binding Runway}"/>
+                    <TextBlock Grid.Column="5" Text="{Binding Level}"/>
+                    <TextBlock Grid.Column="6" Text="{Binding Distance}"/>
+                    <TextBlock Grid.Column="7" Text="{Binding Eta}" Style="{StaticResource Muted}"/>
                   </Grid>
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
           </DockPanel>
+        </controls:FloatingPanel>
+
+        <controls:FloatingPanel x:Name="SilWindow" WindowId="sil" Header="ВХОДЯЩИЕ (SIL)">
+          <ListBox x:Name="SilList" FontFamily="{StaticResource MonoFont}" FontSize="12" SelectionChanged="OnListSelected" MouseDoubleClick="OnSilDoubleClick"
+                   ToolTip="Двойной щелчок — принять передачу">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/><ColumnDefinition Width="40"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Callsign}" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding Other}" Foreground="{DynamicResource AccentBrush}"/>
+                  <TextBlock Grid.Column="2" Text="{Binding Level}"/>
+                  <TextBlock Grid.Column="3" Text="{Binding Info}" Style="{StaticResource Muted}"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </controls:FloatingPanel>
+
+        <controls:FloatingPanel x:Name="SelWindow" WindowId="sel" Header="ВЫХОДЯЩИЕ (SEL)">
+          <ListBox x:Name="SelList" FontFamily="{StaticResource MonoFont}" FontSize="12" SelectionChanged="OnListSelected" MouseDoubleClick="OnSelDoubleClick"
+                   ToolTip="Двойной щелчок — передать следующему диспетчеру">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="80"/><ColumnDefinition Width="46"/><ColumnDefinition Width="100"/><ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding Callsign}" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding Other}" Foreground="{DynamicResource AccentBrush}"/>
+                  <TextBlock Grid.Column="2" Text="{Binding Level}"/>
+                  <TextBlock Grid.Column="3" Text="{Binding Info}" Style="{StaticResource Muted}"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
         </controls:FloatingPanel>
 
         <controls:FloatingPanel x:Name="TrafficWindow" WindowId="traffic" Header="ВЕСЬ ТРАФИК">
@@ -138,11 +206,12 @@
               <TextBlock x:Name="PlanEmpty" Text="Выберите борт на радаре" Style="{StaticResource Muted}" Margin="2,6"/>
               <StackPanel x:Name="PlanContent" Visibility="Collapsed">
                 <DockPanel>
-                  <ToggleButton x:Name="TrackToggle" DockPanel.Dock="Right" Content="Сопровождать" Style="{StaticResource MenuToggle}" Click="OnTrackToggle"/>
+                  <TextBlock x:Name="OwnerText" DockPanel.Dock="Right" Style="{StaticResource Muted}" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}"/>
                   <TextBlock x:Name="PlanCallsign" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/>
                 </DockPanel>
                 <TextBlock x:Name="PlanSubtitle" Style="{StaticResource Muted}" Margin="0,1,0,0"/>
-                <TextBlock x:Name="PlanRoute" FontSize="15" Margin="0,8,0,0"/>
+                <TextBlock x:Name="PlanRoute" FontSize="15" Margin="0,6,0,0"/>
+                <WrapPanel x:Name="CoordButtons" Margin="0,8,0,0"/>
 
                 <TextBlock Text="УКАЗАНИЯ" Style="{StaticResource SectionTitle}" Margin="0,10,0,4"/>
                 <UniformGrid Columns="2">
@@ -169,23 +238,90 @@
                 <TextBlock Text="Заметка" Style="{StaticResource FieldLabel}" Margin="0,2,0,2"/>
                 <TextBox x:Name="ScratchBox" Tag="scratch" KeyDown="OnAnnotationKeyDown" Padding="6,3"/>
 
-                <TextBlock Text="ПЛАН" Style="{StaticResource SectionTitle}" Margin="0,10,0,4"/>
-                <TextBlock x:Name="PlanDetails" TextWrapping="Wrap" LineHeight="18"/>
-                <TextBlock Text="Маршрут" Style="{StaticResource FieldLabel}"/>
-                <TextBlock x:Name="PlanRouteText" TextWrapping="Wrap" FontFamily="{StaticResource MonoFont}"/>
-                <TextBlock Text="Примечания" Style="{StaticResource FieldLabel}"/>
-                <TextBlock x:Name="PlanRemarks" TextWrapping="Wrap" Style="{StaticResource Muted}"/>
+                <TextBlock Text="ПРОЦЕДУРЫ" Style="{StaticResource SectionTitle}" Margin="0,10,0,4"/>
+                <UniformGrid Columns="2">
+                  <StackPanel Margin="0,0,4,4">
+                    <TextBlock Text="SID" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <ComboBox x:Name="SidBox" Tag="sid" SelectionChanged="OnProcedureChanged" FontFamily="{StaticResource MonoFont}"/>
+                  </StackPanel>
+                  <StackPanel Margin="4,0,0,4">
+                    <TextBlock Text="STAR" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <ComboBox x:Name="StarBox" Tag="star" SelectionChanged="OnProcedureChanged" FontFamily="{StaticResource MonoFont}"/>
+                  </StackPanel>
+                  <StackPanel Margin="0,0,4,4">
+                    <TextBlock Text="ВПП вылета" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <ComboBox x:Name="DepRwyBox" Tag="drwy" SelectionChanged="OnProcedureChanged" FontFamily="{StaticResource MonoFont}"/>
+                  </StackPanel>
+                  <StackPanel Margin="4,0,0,4">
+                    <TextBlock Text="ВПП посадки" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <ComboBox x:Name="ArrRwyBox" Tag="arwy" SelectionChanged="OnProcedureChanged" FontFamily="{StaticResource MonoFont}"/>
+                  </StackPanel>
+                </UniformGrid>
+                <CheckBox x:Name="ClrBox" Content="Разрешение на вылет получено" Click="OnClrBoxClick" Margin="0,2,0,0"/>
+
+                <TextBlock Text="ПЛАН ПОЛЁТА" Style="{StaticResource SectionTitle}" Margin="0,10,0,4"/>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition/><ColumnDefinition Width="6"/><ColumnDefinition/><ColumnDefinition Width="6"/><ColumnDefinition/>
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition/><RowDefinition/><RowDefinition/>
+                  </Grid.RowDefinitions>
+                  <StackPanel Margin="0,0,0,4">
+                    <TextBlock Text="Правила" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpRules" CharacterCasing="Upper" MaxLength="1" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Margin="0,0,0,4">
+                    <TextBlock Text="Тип" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpType" CharacterCasing="Upper" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="4" Margin="0,0,0,4">
+                    <TextBlock Text="TAS" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpTas" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Margin="0,0,0,4">
+                    <TextBlock Text="Вылет" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpDep" CharacterCasing="Upper" MaxLength="4" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,4">
+                    <TextBlock Text="Назначение" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpDest" CharacterCasing="Upper" MaxLength="4" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="4" Margin="0,0,0,4">
+                    <TextBlock Text="Запасной" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpAltn" CharacterCasing="Upper" MaxLength="4" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="2" Margin="0,0,0,4">
+                    <TextBlock Text="RFL" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpRfl" CharacterCasing="Upper" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Margin="0,0,0,4">
+                    <TextBlock Text="Вылет по плану (UTC)" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                    <TextBox x:Name="FpTime" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="Маршрут" Style="{StaticResource FieldLabel}" Margin="0,0,0,2"/>
+                <TextBox x:Name="FpRoute" CharacterCasing="Upper" TextWrapping="Wrap" AcceptsReturn="False" MinHeight="44" FontFamily="{StaticResource MonoFont}" Padding="6,3"/>
+                <TextBlock Text="Примечания" Style="{StaticResource FieldLabel}" Margin="0,4,0,2"/>
+                <TextBox x:Name="FpRemarks" TextWrapping="Wrap" Padding="6,3"/>
+                <DockPanel Margin="0,8,0,4">
+                  <Button DockPanel.Dock="Right" Content="Отправить изменения" Style="{StaticResource Primary}" Click="OnAmendClick"
+                          ToolTip="Изменить план полёта для всех диспетчеров ($AM)"/>
+                  <TextBlock x:Name="PlanDetails" TextWrapping="Wrap" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                </DockPanel>
               </StackPanel>
             </StackPanel>
           </ScrollViewer>
         </controls:FloatingPanel>
 
         <controls:FloatingPanel x:Name="AtcWindow" WindowId="atc" Header="ДИСПЕТЧЕРЫ">
-          <ListBox x:Name="AtcList" FontFamily="{StaticResource MonoFont}" FontSize="12">
+          <ListBox x:Name="AtcList" FontFamily="{StaticResource MonoFont}" FontSize="12" MouseDoubleClick="OnAtcDoubleClick"
+                   ToolTip="Двойной щелчок — личное сообщение">
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <DockPanel>
                   <TextBlock DockPanel.Dock="Right" Text="{Binding Frequency}" Foreground="{DynamicResource AccentBrush}"/>
+                  <TextBlock DockPanel.Dock="Left" Text="{Binding Id}" Width="30" Style="{StaticResource Muted}"/>
                   <TextBlock Text="{Binding Callsign}" FontWeight="SemiBold"/>
                 </DockPanel>
               </DataTemplate>

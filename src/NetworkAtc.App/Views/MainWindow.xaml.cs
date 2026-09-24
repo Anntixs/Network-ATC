@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
-using System.Media;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -26,9 +25,15 @@ public sealed record ChatLine(string Time, string From, string Text, Brush Brush
 
 public sealed record TrafficRow(string Callsign, string Level, string Info, Track Track);
 
-public sealed record AtcRow(string Callsign, string Frequency);
+public sealed record AtcRow(string Callsign, string Frequency, string Id);
 
-public sealed record ArrivalView(Track Track, string Callsign, string Type, string Departure, string Destination, string Distance, string Eta);
+public sealed record DepartureView(Track Track, string Callsign, string Type, string Destination, string Sid, string Runway, string Rfl,
+    string Squawk, string Clearance, string Status);
+
+public sealed record ArrivalView(Track Track, string Callsign, string Type, string Departure, string Star, string Runway, string Level,
+    string Distance, string Eta);
+
+public sealed record WeatherView(string Station, string Atis, string Summary, string Raw);
 
 public sealed record ConflictView(Track Track, string Pair, string Separation);
 
@@ -58,12 +63,14 @@ public partial class MainWindow : Window
         ("HIGH AIRWAY", "Верхние трассы"), ("GEO", "Геометрия (GEO)"), ("REGIONS", "Регионы"), ("RUNWAYS", "ВПП"),
         ("AIRPORTS", "Аэродромы"), ("VOR", "VOR"), ("NDB", "NDB"), ("FIXES", "Точки"), ("FIX NAMES", "Имена точек"),
         ("LABELS", "Подписи"), ("FREETEXT", "Текст (.ese)"), ("RANGE RINGS", "Кольца дальности"),
+        ("CENTERLINES", "Продолжения осей ВПП"),
     ];
 
     private static readonly (string Id, string Title)[] ListWindows =
     [
         ("departures", "Вылет"), ("arrivals", "Прилёт"), ("traffic", "Весь трафик"), ("flightplan", "План полёта"),
         ("atc", "Диспетчеры"), ("conflicts", "Конфликты (STCA)"), ("messages", "Сообщения"),
+        ("sil", "Входящие (SIL)"), ("sel", "Выходящие (SEL)"),
     ];
 
     private readonly string _profilePath;
@@ -73,6 +80,11 @@ public partial class MainWindow : Window
     private readonly PluginRegistry _registry = new();
     private readonly PluginManager _plugins;
     private readonly CommandProcessor _commands;
+    private readonly Workspace _workspace;
+    private readonly SoundService _sounds;
+    private bool _updatingPlan;
+    private int _lastConflictCount;
+    private bool _wasConnected;
     private readonly Stca _stca = new();
     private readonly DispatcherTimer _frame = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Dictionary<string, ObservableCollection<ChatLine>> _chats = new(StringComparer.OrdinalIgnoreCase);
@@ -92,12 +104,19 @@ public partial class MainWindow : Window
         _profilePath = profilePath;
         ThemeApplier.Apply(_profile.Theme);
 
-        _windows = new FloatingPanel[] { DeparturesWindow, ArrivalsWindow, TrafficWindow, FlightPlanWindow, AtcWindow, ConflictsWindow, MessagesWindow }
+        _windows = new FloatingPanel[] { DeparturesWindow, ArrivalsWindow, TrafficWindow, FlightPlanWindow, AtcWindow, ConflictsWindow, MessagesWindow, SilWindow, SelWindow }
             .ToDictionary(w => w.WindowId, StringComparer.OrdinalIgnoreCase);
         foreach (var w in _windows.Values) w.LayoutChanged += (_, _) => SaveWindowLayout((FloatingPanel)w);
 
         _plugins = new PluginManager(_session, _tagFields, _registry, () => Radar.Selected, Path.Combine(Profile.DefaultDirectory, "plugin-data"));
         _commands = new CommandProcessor(_session, () => _profile, _registry, () => Radar.Selected);
+        _workspace = new Workspace(_session, () => _profile);
+        _commands.Workspace = _workspace;
+        _tagFields.Workspace = _workspace;
+        Radar.Workspace = _workspace;
+        _session.LocalCallsign = _profile.Station.Callsign;
+        _session.ControllerInfo = () => _commands.ControllerInfoLines();
+        _sounds = new SoundService(() => _profile.Sounds);
 
         Radar.Profile = _profile;
         Radar.TagFields = _tagFields;
@@ -122,7 +141,11 @@ public partial class MainWindow : Window
         _registry.Changed += (_, _) => Dispatcher.BeginInvoke(BuildLayerList);
         _commands.CenterRequested += (_, p) => Radar.CenterOn(p);
         _commands.SelectRequested += (_, t) => Radar.Select(t);
-        _commands.Changed += (_, _) => _dirty = true;
+        _commands.Changed += (_, _) => { _dirty = true; Dispatcher.BeginInvoke(RefreshWeather); };
+        _session.Coordination += (_, e) => Dispatcher.BeginInvoke(() => OnCoordination(e));
+        _workspace.Weather.Updated += (_, _) => Dispatcher.BeginInvoke(RefreshWeather);
+        _workspace.Weather.Enabled = _profile.FetchMetar;
+        _workspace.Weather.Start();
 
         OpenChat("Радио");
         ApplyProfile();
@@ -136,7 +159,8 @@ public partial class MainWindow : Window
         _frame.Start();
         PreviewKeyDown += OnPreviewKeyDown;
         Closing += OnClosing;
-        Info("Network-ATC готов. .help — команды · .demo — демо-трафик · .airport UUEE — активные аэродромы · щелчок по полю тега — редактирование");
+        RefreshWeather();
+        Info("Network-ATC готов. .help — команды · .demo — демо-трафик · ВПП — аэродромы и ВПП · F12 — взять/принять борт · правая кнопка с протяжкой — измерить расстояние");
     }
 
     // ---- setup ---------------------------------------------------------------------------------
@@ -169,6 +193,7 @@ public partial class MainWindow : Window
             var sector = SectorLoader.Load(path);
             bool sameAsLastTime = string.Equals(_profile.SectorFile, path, StringComparison.OrdinalIgnoreCase);
             Radar.SetSector(sector);
+            _workspace.SetSector(sector);
             _sectorPath = path;
             _commands.DemoCenter = sector.Center;
             if (sameAsLastTime && _profile.ViewCenterLatitude != 0)
@@ -258,10 +283,13 @@ public partial class MainWindow : Window
     private void OnFrame()
     {
         _frameCount++;
+        if (Radar.NeedsAnimation) _dirty = true;
         if (_dirty)
         {
             _dirty = false;
             Radar.Conflicts = _profile.StcaEnabled ? _stca.Check(_session.Tracks) : [];
+            if (Radar.Conflicts.Count > _lastConflictCount) _sounds.Play(SoundEvent.ConflictAlert);
+            _lastConflictCount = Radar.Conflicts.Count;
             Radar.InvalidateVisual();
         }
         if (_frameCount % 4 == 0)
@@ -285,11 +313,22 @@ public partial class MainWindow : Window
         Update(TrafficList, tracks.OrderBy(t => t.Callsign)
             .Select(t => new TrafficRow(t.Callsign, _tagFields.FlightLevel(t.Altitude),
                 $"{t.AircraftType} {(t.Destination.Length > 0 ? "→ " + t.Destination : "")}".Trim(), t)).ToList());
-        Update(DepartureList, TrafficLists.Departures(_session.Tracks, airports, Radar.Sector).ToList());
+        var proc = _workspace.Procedures;
+        Update(DepartureList, TrafficLists.Departures(_session.Tracks, airports, Radar.Sector)
+            .Select(d => new DepartureView(d.Track, d.Callsign, d.Type, d.Destination, proc.Sid(d.Track) ?? "", proc.DepartureRunway(d.Track) ?? "",
+                d.Rfl, d.Squawk, d.Track.ClearanceReceived ? "✓" : "·",
+                d.Track.GroundState.Length > 0 ? d.Track.GroundState : d.Status)).ToList());
         Update(ArrivalList, TrafficLists.Arrivals(tracks, airports, Radar.Sector)
-            .Select(a => new ArrivalView(a.Track, a.Callsign, a.Type, a.Departure, a.Destination,
+            .Select(a => new ArrivalView(a.Track, a.Callsign, a.Type, a.Departure, proc.Star(a.Track) ?? "", proc.ArrivalRunway(a.Track) ?? "",
+                _tagFields.FlightLevel(a.Track.Altitude),
                 double.IsNaN(a.DistanceNm) ? "—" : a.DistanceNm.ToString("0"),
                 a.EtaMinutes is { } m ? DateTime.UtcNow.AddMinutes(m).ToString("HH:mm") : "")).ToList());
+        var sil = _workspace.InboundList(_tagFields.FlightLevel).ToList();
+        Update(SilList, sil);
+        SilWindow.Header = $"ВХОДЯЩИЕ (SIL) · {sil.Count}";
+        var sel = _workspace.OutboundList(_tagFields.FlightLevel).ToList();
+        Update(SelList, sel);
+        SelWindow.Header = $"ВЫХОДЯЩИЕ (SEL) · {sel.Count}";
         Update(ConflictList, Radar.Conflicts.Select(c => new ConflictView(c.A, $"{c.A.Callsign} / {c.B.Callsign}",
             $"{c.DistanceNm:0.0} NM {c.VerticalFeet} ft{(c.Predicted ? " ▸" : "")}")).ToList());
         ConflictsWindow.Header = $"КОНФЛИКТЫ (STCA) · {Radar.Conflicts.Count}";
@@ -313,6 +352,8 @@ public partial class MainWindow : Window
     {
         TrafficRow r => r.Track,
         DepartureRow d => d.Track,
+        DepartureView d => d.Track,
+        SectorListRow r => r.Track,
         ArrivalView a => a.Track,
         ConflictView c => c.Track,
         _ => null,
@@ -348,8 +389,22 @@ public partial class MainWindow : Window
         return $"{h}{d:000}°{m:00}'{s:00}\"";
     }
 
-    private void RefreshControllers() =>
-        AtcList.ItemsSource = _session.Controllers.Select(c => new AtcRow(c.Callsign, Frequency.Format(c.FrequencyKhz))).ToList();
+    private void RefreshControllers()
+    {
+        _workspace.UpdateOwnership();
+        AtcList.ItemsSource = _session.Controllers.Select(c => new AtcRow(c.Callsign, Frequency.Format(c.FrequencyKhz), _workspace.ShortName(c.Callsign)))
+            .ToList();
+    }
+
+    private void RefreshWeather()
+    {
+        WeatherStrip.ItemsSource = _profile.ActiveAirports.Select(icao =>
+        {
+            var m = _workspace.Weather.Get(icao);
+            return new WeatherView(icao, _profile.AtisLetters.GetValueOrDefault(icao, ""),
+                m == null ? "—" : $"{m.Wind} Q{m.Qnh?.ToString() ?? "—"}", m?.Raw ?? "METAR ещё не получен");
+        }).ToList();
+    }
 
     // ---- selection and flight plan window -----------------------------------------------------------
 
@@ -368,29 +423,148 @@ public partial class MainWindow : Window
 
     private void ShowPlan(Track t)
     {
-        PlanEmpty.Visibility = Visibility.Collapsed;
-        PlanContent.Visibility = Visibility.Visible;
-        PlanCallsign.Text = t.Callsign;
-        CflBox.Text = t.ClearedAltitude is { } c ? _tagFields.FlightLevel(c) : "";
-        HdgBox.Text = t.AssignedHeading?.ToString("000") ?? "";
-        SpdBox.Text = t.AssignedSpeed?.ToString() ?? "";
-        SqBox.Text = t.AssignedSquawk?.ToString("0000") ?? "";
-        ScratchBox.Text = t.Scratchpad;
-        TrackToggle.IsChecked = t.IsTracked;
-        TrackToggle.Content = t.IsTracked ? "Отпустить" : "Сопровождать";
-        PlanRouteText.Text = t.Route.Length > 0 ? t.Route : "—";
-        PlanRemarks.Text = t.Remarks.Length > 0 ? t.Remarks : "—";
-        ShowPlanSummary(t);
+        _updatingPlan = true;
+        try
+        {
+            PlanEmpty.Visibility = Visibility.Collapsed;
+            PlanContent.Visibility = Visibility.Visible;
+            PlanCallsign.Text = t.Callsign;
+            CflBox.Text = t.ClearedAltitude is { } c ? _tagFields.FlightLevel(c) : "";
+            HdgBox.Text = t.AssignedHeading?.ToString("000") ?? "";
+            SpdBox.Text = t.AssignedSpeed?.ToString() ?? "";
+            SqBox.Text = t.AssignedSquawk?.ToString("0000") ?? "";
+            ScratchBox.Text = t.Scratchpad;
+
+            var proc = _workspace.Procedures;
+            FillCombo(SidBox, proc.Sids(t.Departure, proc.DepartureRunway(t)).Select(p => p.Name), t.Sid, proc.Sid(t));
+            FillCombo(StarBox, proc.Stars(t.Destination, proc.ArrivalRunway(t)).Select(p => p.Name), t.Star, proc.Star(t));
+            FillCombo(DepRwyBox, RunwaysOf(t.Departure), t.DepartureRunway, proc.DepartureRunway(t));
+            FillCombo(ArrRwyBox, RunwaysOf(t.Destination), t.ArrivalRunway, proc.ArrivalRunway(t));
+            ClrBox.IsChecked = t.ClearanceReceived;
+
+            FpRules.Text = t.Rules;
+            FpType.Text = t.AircraftType;
+            FpTas.Text = t.FiledSpeed > 0 ? t.FiledSpeed.ToString() : "";
+            FpDep.Text = t.Departure;
+            FpDest.Text = t.Destination;
+            FpAltn.Text = t.Alternate;
+            FpRfl.Text = t.FiledAltitude;
+            FpTime.Text = t.Plan?.DepartureTime ?? "";
+            FpRoute.Text = t.Route;
+            FpRemarks.Text = t.Remarks;
+            ShowPlanSummary(t);
+            BuildCoordinationButtons(t);
+        }
+        finally
+        {
+            _updatingPlan = false;
+        }
+    }
+
+    private IEnumerable<string> RunwaysOf(string airport) =>
+        Radar.Sector?.Runways.Where(r => r.Airport.Equals(airport, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(r => new[] { r.Id1, r.Id2 }).Distinct().Order() ?? Enumerable.Empty<string>();
+
+    /// <summary>Items: "авто (X)" for the automatic choice, then the values; selects the assigned one.</summary>
+    private static void FillCombo(ComboBox box, IEnumerable<string> values, string assigned, string? effective)
+    {
+        var items = new List<ComboBoxItem> { new() { Content = $"авто{(effective != null && assigned.Length == 0 ? $" ({effective})" : "")}", Tag = "" } };
+        items.AddRange(values.Distinct().Select(v => new ComboBoxItem { Content = v, Tag = v }));
+        if (assigned.Length > 0 && items.All(i => (string)i.Tag != assigned)) items.Add(new ComboBoxItem { Content = assigned, Tag = assigned });
+        box.ItemsSource = items;
+        box.SelectedItem = items.FirstOrDefault(i => (string)i.Tag == assigned) ?? items[0];
     }
 
     private void ShowPlanSummary(Track t)
     {
-        PlanSubtitle.Text = $"{(t.AircraftType.Length > 0 ? t.AircraftType : "тип ?")}/{t.WakeCategory}   код {t.Squawk:0000}{(t.ModeC ? "" : " STBY")}";
+        var state = _workspace.StateOf(t);
+        PlanSubtitle.Text = $"{(t.AircraftType.Length > 0 ? t.AircraftType : "тип ?")}/{t.WakeCategory}   код {t.Squawk:0000}{(t.ModeC ? "" : " STBY")}" +
+                            (t.CommType.Length > 0 ? $"   /{t.CommType.ToLowerInvariant()}" : "");
         PlanRoute.Text = t.HasFlightPlan ? $"{t.Departure}  →  {t.Destination}" : "Нет плана полёта";
-        PlanDetails.Text = t.HasFlightPlan
-            ? $"{t.Rules}   RFL {t.FiledAltitude}   TAS {t.FiledSpeed}   ALTN {(t.Alternate.Length > 0 ? t.Alternate : "—")}\n" +
-              $"{_tagFields.FlightLevel(t.Altitude)}  {t.GroundSpeed} kt  {t.Heading:000}°  {t.VerticalSpeed:+0;-0;0} ft/min"
-            : $"{_tagFields.FlightLevel(t.Altitude)}  {t.GroundSpeed} kt  {t.Heading:000}°";
+        OwnerText.Text = TrackStates.Title(state) + (t.Owner.Length > 0 && !t.IsTracked ? $" · {t.Owner}" : "");
+        string warn = Warnings.Text(t, _workspace.WarningOf(t));
+        PlanDetails.Text = $"{_tagFields.FlightLevel(t.Altitude)}  {t.GroundSpeed} kt  {t.Heading:000}°  {t.VerticalSpeed:+0;-0;0} ft/min" +
+                           (warn.Length > 0 ? "   " + warn : "");
+    }
+
+    private void BuildCoordinationButtons(Track t)
+    {
+        CoordButtons.Children.Clear();
+        void Add(string title, Action action, bool primary = false)
+        {
+            var b = new Button { Content = title, Margin = new Thickness(0, 0, 6, 4), Padding = new Thickness(9, 3, 9, 3) };
+            if (primary) b.Style = (Style)FindResource("Primary");
+            b.Click += (_, _) => action();
+            CoordButtons.Children.Add(b);
+        }
+        switch (_workspace.StateOf(t))
+        {
+            case TrackState.TransferToMe:
+                Add($"Принять от {t.HandoffFrom}", () => Coord(() => _session.AcceptHandoffAsync(t)), primary: true);
+                Add("Отклонить", () => Coord(() => _session.RefuseHandoffAsync(t)));
+                break;
+            case TrackState.TransferFromMe:
+                Add($"Отменить передачу {t.HandoffTo}", () => Coord(() => _session.CancelHandoffAsync(t)));
+                break;
+            case TrackState.Assumed:
+                if (_workspace.NextController(t) is { } next)
+                    Add($"Передать {_workspace.ShortName(next)}", () => Coord(() => _session.HandoffAsync(t, next)), primary: true);
+                Add("Передать…", () => ShowControllerMenu(t, cs => Coord(() => _session.HandoffAsync(t, cs))));
+                Add("Отпустить", () => Coord(() => _session.ReleaseAsync(t)));
+                break;
+            case TrackState.Redundant:
+                break;
+            default:
+                Add("Взять", () => Coord(() => _session.AssumeAsync(t)), primary: true);
+                break;
+        }
+        Add(t.ShowRoute ? "Скрыть маршрут" : "Маршрут", () => { t.ShowRoute = !t.ShowRoute; _dirty = true; BuildCoordinationButtons(t); });
+    }
+
+    /// <summary>Runs a coordination action and reports its refusal reason, if any.</summary>
+    private async void Coord(Func<Task<string?>> action)
+    {
+        try
+        {
+            if (await action() is { } problem) Error(problem);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error(ex.Message);
+        }
+        _dirty = true;
+        if (Radar.Selected is { } s) ShowPlan(s);
+    }
+
+    private void AssumeOrRelease(Track t) => Coord(() => t.IsTracked ? _session.ReleaseAsync(t) : _session.AssumeAsync(t));
+
+    /// <summary>Menu of the controllers online, the next one by sector first.</summary>
+    private void ShowControllerMenu(Track t, Action<string> pick, string title = "Передать")
+    {
+        var menu = new ContextMenu();
+        menu.Items.Add(new MenuItem { Header = title, IsEnabled = false });
+        foreach (var item in ControllerItems(t, pick)) menu.Items.Add(item);
+        menu.IsOpen = true;
+    }
+
+    private List<object> ControllerItems(Track t, Action<string> pick)
+    {
+        var items = new List<object>();
+        string? next = _workspace.NextController(t);
+        var online = _session.Controllers.OrderBy(c => c.Callsign != next).ThenBy(c => c.Callsign).ToList();
+        foreach (var c in online)
+        {
+            var mi = new MenuItem
+            {
+                Header = $"{(c.Callsign == next ? "» " : "")}{c.Callsign}  {_workspace.ShortName(c.Callsign)}  {Frequency.Format(c.FrequencyKhz)}",
+                FontWeight = c.Callsign == next ? FontWeights.SemiBold : FontWeights.Normal,
+            };
+            string cs = c.Callsign;
+            mi.Click += (_, _) => pick(cs);
+            items.Add(mi);
+        }
+        if (online.Count == 0) items.Add(new MenuItem { Header = "нет диспетчеров в сети (передать: .ho ПОЗЫВНОЙ)", IsEnabled = false });
+        return items;
     }
 
     private async void OnAnnotationKeyDown(object sender, KeyEventArgs e)
@@ -402,6 +576,48 @@ public partial class MainWindow : Window
         Radar.Focus();
     }
 
+    private void OnProcedureChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingPlan || sender is not ComboBox { SelectedItem: ComboBoxItem item } box || Radar.Selected is not { } t) return;
+        Annotate(t, $".{box.Tag} {item.Tag}");
+    }
+
+    private void OnClrBoxClick(object sender, RoutedEventArgs e)
+    {
+        if (Radar.Selected is { } t && ClrBox.IsChecked != t.ClearanceReceived) Annotate(t, ".clr");
+    }
+
+    private void OnClearanceClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Track t }) Annotate(t, ".clr");
+    }
+
+    private async void OnAmendClick(object sender, RoutedEventArgs e)
+    {
+        if (Radar.Selected is not { } t) return;
+        if (!int.TryParse(FpTas.Text.Trim(), out var tas) || tas is < 0 or > 9999)
+        {
+            Error("TAS — число узлов");
+            return;
+        }
+        var old = t.Plan;
+        var plan = new FiledPlan(t.Callsign, FpRules.Text.Trim().ToUpperInvariant(), FpType.Text.Trim().ToUpperInvariant(), tas,
+            FpDep.Text.Trim().ToUpperInvariant(), FpTime.Text.Trim(), FpRfl.Text.Trim().ToUpperInvariant(), FpDest.Text.Trim().ToUpperInvariant(),
+            FpAltn.Text.Trim().ToUpperInvariant(), FpRemarks.Text.Trim(), FpRoute.Text.Trim().ToUpperInvariant(),
+            old?.EnrouteHours ?? "0", old?.EnrouteMinutes ?? "0", old?.FuelHours ?? "0", old?.FuelMinutes ?? "0");
+        try
+        {
+            await _session.AmendFlightPlanAsync(t, plan);
+            Info($"План полёта {t.Callsign} изменён" + (_session.IsConnected ? " и отправлен" : " (локально)"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error(ex.Message);
+        }
+        _dirty = true;
+        ShowPlan(t);
+    }
+
     private async void OnAssignSquawk(object sender, RoutedEventArgs e)
     {
         if (Radar.Selected is not { } t) return;
@@ -410,12 +626,57 @@ public partial class MainWindow : Window
         ShowPlan(t);
     }
 
-    private void OnTrackToggle(object sender, RoutedEventArgs e)
+    // ---- coordination events ------------------------------------------------------------------------
+
+    private void OnCoordination(CoordinationEvent e)
     {
-        if (Radar.Selected is not { } t) return;
-        t.IsTracked = !t.IsTracked;
-        ShowPlan(t);
+        var t = e.Track;
+        switch (e.Kind)
+        {
+            case CoordinationKind.HandoffRequested:
+                Info($"{e.Peer} передаёт вам {t.Callsign} — F12 принять, Ctrl+D отклонить");
+                _sounds.Play(SoundEvent.HandoffRequest);
+                if (SilWindow.Visibility != Visibility.Visible) ShowWindow("sil", true);
+                break;
+            case CoordinationKind.HandoffAccepted:
+                Info($"{e.Peer} принял {t.Callsign}");
+                _sounds.Play(SoundEvent.HandoffAccepted);
+                break;
+            case CoordinationKind.HandoffRefused:
+                Error($"{e.Peer} отклонил передачу {t.Callsign}");
+                _sounds.Play(SoundEvent.HandoffRefused);
+                break;
+            case CoordinationKind.HandoffCancelled:
+                Info($"{e.Peer} отменил передачу {t.Callsign}");
+                break;
+            case CoordinationKind.PointOut:
+                Info($"{e.Peer} показывает вам {t.Callsign}");
+                _sounds.Play(SoundEvent.PointOut);
+                break;
+        }
         _dirty = true;
+        if (ReferenceEquals(Radar.Selected, t)) ShowPlan(t);
+    }
+
+    private void OnSilDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (SilList.SelectedItem is SectorListRow { Track: var t })
+            Coord(() => _session.AssumeAsync(t));
+    }
+
+    private void OnSelDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (SelList.SelectedItem is not SectorListRow { Track: var t }) return;
+        if (_workspace.NextController(t) is { } next) Coord(() => _session.HandoffAsync(t, next));
+        else ShowControllerMenu(t, cs => Coord(() => _session.HandoffAsync(t, cs)));
+    }
+
+    private void OnAtcDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (AtcList.SelectedItem is not AtcRow row) return;
+        OpenChat(row.Callsign);
+        ShowWindow("messages", true);
+        CommandLine.Focus();
     }
 
     // ---- interactive tag ----------------------------------------------------------------------
@@ -431,10 +692,26 @@ public partial class MainWindow : Window
         switch (action)
         {
             case TagActions.ToggleTrack:
-                t.IsTracked = !t.IsTracked;
+                if (_workspace.StateOf(t) == TrackState.TransferToMe) Coord(() => _session.AcceptHandoffAsync(t));
+                else AssumeOrRelease(t);
                 break;
             case TagActions.AircraftMenu:
                 ShowTargetMenu(t);
+                break;
+            case TagActions.Handoff:
+                HandoffClick(t, e.Right);
+                break;
+            case TagActions.Procedure:
+                ProcedureMenu(t);
+                break;
+            case TagActions.Runway:
+                RunwayMenu(t);
+                break;
+            case TagActions.Clearance:
+                Annotate(t, ".clr");
+                break;
+            case TagActions.Route:
+                t.ShowRoute = !t.ShowRoute;
                 break;
             case TagActions.ClearedLevel:
             {
@@ -493,6 +770,74 @@ public partial class MainWindow : Window
         ShowPlan(t);
     }
 
+    /// <summary>Click on the owner/handoff field: accept or refuse an offer, offer our aircraft, assume a free one.</summary>
+    private void HandoffClick(Track t, bool right)
+    {
+        switch (_workspace.StateOf(t))
+        {
+            case TrackState.TransferToMe:
+                Coord(() => right ? _session.RefuseHandoffAsync(t) : _session.AcceptHandoffAsync(t));
+                break;
+            case TrackState.TransferFromMe:
+                Coord(() => _session.CancelHandoffAsync(t));
+                break;
+            case TrackState.Assumed:
+                if (!right && _workspace.NextController(t) is { } next) Coord(() => _session.HandoffAsync(t, next));
+                else ShowControllerMenu(t, cs => Coord(() => _session.HandoffAsync(t, cs)));
+                break;
+            case TrackState.Redundant:
+                Info($"{t.Callsign} ведёт {t.Owner}");
+                break;
+            default:
+                Coord(() => _session.AssumeAsync(t));
+                break;
+        }
+    }
+
+    private bool IsDepartureSide(Track t) =>
+        _profile.ActiveAirports.Contains(t.Departure, StringComparer.OrdinalIgnoreCase) &&
+        _workspace.ProcedureOf(t) is var p && (p == null || p == _workspace.Procedures.Sid(t));
+
+    private void ProcedureMenu(Track t)
+    {
+        bool departure = IsDepartureSide(t);
+        var proc = _workspace.Procedures;
+        var names = departure
+            ? proc.Sids(t.Departure, proc.DepartureRunway(t)).Select(p => p.Name)
+            : proc.Stars(t.Destination, proc.ArrivalRunway(t)).Select(p => p.Name);
+        string cmd = departure ? ".sid" : ".star";
+        var menu = new ContextMenu();
+        menu.Items.Add(new MenuItem { Header = departure ? "SID" : "STAR", IsEnabled = false });
+        foreach (var n in names.Distinct())
+        {
+            var mi = new MenuItem { Header = n };
+            mi.Click += (_, _) => Annotate(t, $"{cmd} {n}");
+            menu.Items.Add(mi);
+        }
+        var auto = new MenuItem { Header = "автоматически" };
+        auto.Click += (_, _) => Annotate(t, cmd);
+        menu.Items.Add(auto);
+        menu.IsOpen = true;
+    }
+
+    private void RunwayMenu(Track t)
+    {
+        bool departure = IsDepartureSide(t);
+        string cmd = departure ? ".drwy" : ".arwy";
+        var menu = new ContextMenu();
+        menu.Items.Add(new MenuItem { Header = departure ? "ВПП вылета" : "ВПП посадки", IsEnabled = false });
+        foreach (var r in RunwaysOf(departure ? t.Departure : t.Destination))
+        {
+            var mi = new MenuItem { Header = r };
+            mi.Click += (_, _) => Annotate(t, $"{cmd} {r}");
+            menu.Items.Add(mi);
+        }
+        var auto = new MenuItem { Header = "по умолчанию" };
+        auto.Click += (_, _) => Annotate(t, cmd);
+        menu.Items.Add(auto);
+        menu.IsOpen = true;
+    }
+
     /// <summary>Runs an annotation command for the aircraft and reports problems.</summary>
     private async void Annotate(Track t, string command)
     {
@@ -503,19 +848,82 @@ public partial class MainWindow : Window
         ShowPlan(t);
     }
 
+    /// <summary>The aircraft menu, as EuroScope's right-click menu: coordination first, then procedures and tools.</summary>
     private void ShowTargetMenu(Track t)
     {
         var menu = new ContextMenu();
-        void Add(string title, Action action)
+        MenuItem Item(string title, Action action, ItemsControl? parent = null)
         {
             var item = new MenuItem { Header = title };
             item.Click += (_, _) => { action(); _dirty = true; if (ReferenceEquals(Radar.Selected, t)) ShowPlan(t); };
-            menu.Items.Add(item);
+            (parent ?? menu).Items.Add(item);
+            return item;
         }
-        Add(t.IsTracked ? "Отпустить" : "Взять на сопровождение", () => t.IsTracked = !t.IsTracked);
-        Add("Выдать код ответчика", () => OnAssignSquawk(this, new RoutedEventArgs()));
-        Add("Запросить план полёта", () => _ = _session.RequestFlightPlanAsync(t.Callsign));
-        Add("Личное сообщение…", () =>
+        MenuItem Sub(string title)
+        {
+            var item = new MenuItem { Header = title };
+            menu.Items.Add(item);
+            return item;
+        }
+
+        menu.Items.Add(new MenuItem { Header = $"{t.Callsign} · {TrackStates.Title(_workspace.StateOf(t))}", IsEnabled = false });
+        switch (_workspace.StateOf(t))
+        {
+            case TrackState.TransferToMe:
+                Item($"Принять от {t.HandoffFrom}", () => Coord(() => _session.AcceptHandoffAsync(t)));
+                Item("Отклонить передачу", () => Coord(() => _session.RefuseHandoffAsync(t)));
+                break;
+            case TrackState.TransferFromMe:
+                Item($"Отменить передачу {t.HandoffTo}", () => Coord(() => _session.CancelHandoffAsync(t)));
+                Item("Отпустить", () => Coord(() => _session.ReleaseAsync(t)));
+                break;
+            case TrackState.Assumed:
+                var transfer = Sub("Передать");
+                foreach (var i in ControllerItems(t, cs => Coord(() => _session.HandoffAsync(t, cs)))) transfer.Items.Add(i);
+                Item("Отпустить", () => Coord(() => _session.ReleaseAsync(t)));
+                break;
+            case TrackState.Redundant:
+                menu.Items.Add(new MenuItem { Header = $"ведёт {t.Owner}", IsEnabled = false });
+                break;
+            default:
+                Item("Взять на сопровождение", () => Coord(() => _session.AssumeAsync(t)));
+                break;
+        }
+        var point = Sub("Показать диспетчеру (point-out)");
+        foreach (var i in ControllerItems(t, cs => Coord(() => _session.PointOutAsync(t, cs)))) point.Items.Add(i);
+        menu.Items.Add(new Separator());
+
+        var proc = _workspace.Procedures;
+        var sid = Sub($"SID  {proc.Sid(t) ?? "—"}");
+        foreach (var p in proc.Sids(t.Departure, proc.DepartureRunway(t)).Select(p => p.Name).Distinct())
+            Item(p, () => Annotate(t, $".sid {p}"), sid);
+        Item("автоматически", () => Annotate(t, ".sid"), sid);
+        var star = Sub($"STAR  {proc.Star(t) ?? "—"}");
+        foreach (var p in proc.Stars(t.Destination, proc.ArrivalRunway(t)).Select(p => p.Name).Distinct())
+            Item(p, () => Annotate(t, $".star {p}"), star);
+        Item("автоматически", () => Annotate(t, ".star"), star);
+        var drwy = Sub($"ВПП вылета  {proc.DepartureRunway(t) ?? "—"}");
+        foreach (var r in RunwaysOf(t.Departure)) Item(r, () => Annotate(t, $".drwy {r}"), drwy);
+        var arwy = Sub($"ВПП посадки  {proc.ArrivalRunway(t) ?? "—"}");
+        foreach (var r in RunwaysOf(t.Destination)) Item(r, () => Annotate(t, $".arwy {r}"), arwy);
+        var clr = Item("Разрешение получено", () => Annotate(t, ".clr"));
+        clr.IsCheckable = true;
+        clr.IsChecked = t.ClearanceReceived;
+        var ground = Sub($"Наземный статус  {(t.GroundState.Length > 0 ? t.GroundState : "—")}");
+        foreach (var gs in new[] { "STUP", "PUSH", "TAXI", "DEPA" }) Item(gs, () => Annotate(t, $".state {gs}"), ground);
+        Item("снять", () => Annotate(t, ".state"), ground);
+        Item("Выдать код ответчика", () => OnAssignSquawk(this, new RoutedEventArgs()));
+        menu.Items.Add(new Separator());
+
+        var route = Item("Маршрут на радаре", () => t.ShowRoute = !t.ShowRoute);
+        route.IsCheckable = true;
+        route.IsChecked = t.ShowRoute;
+        var halo = Sub($"Кольцо вокруг борта{(t.HaloNm is { } h ? $"  {h:0.#} NM" : "")}");
+        foreach (var nm in new[] { 1, 3, 5, 10, 15 }) Item($"{nm} NM", () => t.HaloNm = nm, halo);
+        Item("убрать", () => t.HaloNm = null, halo);
+        Item("Запросить план полёта", () => _ = _session.RequestFlightPlanAsync(t.Callsign));
+        Item("Попросить выйти на мою частоту", () => Annotate(t, $".contactme {t.Callsign}"));
+        Item("Личное сообщение…", () =>
         {
             CommandLine.Text = $".msg {t.Callsign} ";
             CommandLine.Focus();
@@ -525,7 +933,7 @@ public partial class MainWindow : Window
         lock (_registry.AircraftActions) actions = _registry.AircraftActions.ToList();
         if (actions.Count > 0) menu.Items.Add(new Separator());
         foreach (var a in actions)
-            Add(a.Title, () =>
+            Item(a.Title, () =>
             {
                 try { a.Action(t); }
                 catch (Exception e) { Error($"{a.Owner}: {e.Message}"); }
@@ -570,6 +978,9 @@ public partial class MainWindow : Window
         ConnectDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "SuccessBrush" : "DangerBrush");
         StationText.Text = connected && _session.Info is { } i ? $"{i.Callsign}  {Frequency.Format(i.FrequencyKhz)}" : "";
         if (!connected) AtcList.ItemsSource = null;
+        if (connected != _wasConnected) _sounds.Play(connected ? SoundEvent.Connected : SoundEvent.Disconnected);
+        _wasConnected = connected;
+        _workspace.UpdateOwnership();
         _dirty = true;
     }
 
@@ -583,9 +994,10 @@ public partial class MainWindow : Window
         if (m.Channel == MessageChannel.Private && m.Peer != null)
         {
             AddLine(m.Peer, m.From, m.Text, color);
-            if (!m.Outgoing) SystemSounds.Asterisk.Play();
+            if (!m.Outgoing) _sounds.Play(SoundEvent.PrivateMessage);
             return;
         }
+        if (m.Channel == MessageChannel.Radio && !m.Outgoing) _sounds.Play(SoundEvent.RadioMessage);
         string from = m.Channel == MessageChannel.Radio && m.FrequencyKhz is { } f && !m.Outgoing ? $"{m.From} [{Frequency.Format(f)}]" : m.From;
         AddLine("Радио", from, m.Text, color);
     }
@@ -694,6 +1106,17 @@ public partial class MainWindow : Window
         SaveProfile();
     }
 
+    private void OnRunwaysClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new RunwaysWindow(_profile, Radar.Sector) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        SaveProfile();
+        RefreshWeather();
+        _ = _workspace.Weather.RefreshAsync();
+        _dirty = true;
+        if (Radar.Selected is { } t) ShowPlan(t);
+    }
+
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         SaveProfile();
@@ -705,6 +1128,10 @@ public partial class MainWindow : Window
         BuildLayerList();
         ApplyWindowLayouts();
         if (!string.Equals(_profile.SectorFile, _sectorPath, StringComparison.OrdinalIgnoreCase)) LoadSector(_profile.SectorFile);
+        _session.LocalCallsign = _profile.Station.Callsign;
+        _workspace.Weather.Enabled = _profile.FetchMetar;
+        _workspace.UpdateOwnership();
+        RefreshWeather();
         SaveProfile();
     }
 
@@ -752,8 +1179,36 @@ public partial class MainWindow : Window
             case "OpenSector": OnOpenSectorClick(this, new RoutedEventArgs()); return true;
             case "OpenSettings": OnSettingsClick(this, new RoutedEventArgs()); return true;
             case "Connect": OnConnectClick(this, new RoutedEventArgs()); return true;
-            case "TrackSelected": if (Radar.Selected is { } t) { t.IsTracked = !t.IsTracked; ShowPlan(t); _dirty = true; } return true;
-            case "ClearSelection": Radar.Select(null); Radar.Focus(); return true;
+            case "TrackSelected": if (Radar.Selected is { } t) AssumeOrRelease(t); return true;
+            case "AssumeOrAccept":
+                if (Radar.Selected is { } a) Coord(() => _session.AssumeAsync(a));
+                else if (_session.Tracks.FirstOrDefault(x => _workspace.StateOf(x) == TrackState.TransferToMe) is { } offered)
+                {
+                    Radar.Select(offered);
+                    Coord(() => _session.AcceptHandoffAsync(offered));
+                }
+                return true;
+            case "HandoffNext":
+                if (Radar.Selected is { } h)
+                {
+                    if (_workspace.NextController(h) is { } next) Coord(() => _session.HandoffAsync(h, next));
+                    else ShowControllerMenu(h, cs => Coord(() => _session.HandoffAsync(h, cs)));
+                }
+                return true;
+            case "ReleaseOrRefuse":
+                if (Radar.Selected is { } r)
+                    Coord(() => _workspace.StateOf(r) == TrackState.TransferToMe ? _session.RefuseHandoffAsync(r) : _session.ReleaseAsync(r));
+                return true;
+            case "ToggleRoute": if (Radar.Selected is { } rt) { rt.ShowRoute = !rt.ShowRoute; _dirty = true; } return true;
+            case "ActiveRunways": OnRunwaysClick(this, new RoutedEventArgs()); return true;
+            case "ToggleSil": ShowWindow("sil"); return true;
+            case "ToggleSel": ShowWindow("sel"); return true;
+            case "ClearSelection":
+                // Esc: first drop the selection, then the measuring lines.
+                if (Radar.Selected == null) Radar.ClearTools();
+                Radar.Select(null);
+                Radar.Focus();
+                return true;
         }
         return false;
     }
@@ -775,6 +1230,7 @@ public partial class MainWindow : Window
     {
         SaveProfile();
         _plugins.ShutdownAll();
+        _workspace.Dispose();
         _session.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
     }
 }

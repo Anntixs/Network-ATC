@@ -13,6 +13,12 @@ public sealed class TagFields
     /// <summary>Altitudes at or above this are shown as flight levels.</summary>
     public int TransitionAltitude { get; set; } = 10000;
 
+    /// <summary>Source of the coordination fields (owner, next, SID/STAR, warnings); set by the application.</summary>
+    public Session.Workspace? Workspace { get; set; }
+
+    private string WithTrack(IAircraft a, Func<Radar.Track, Session.Workspace, string?> f) =>
+        a is Radar.Track t && Workspace is { } w ? f(t, w) ?? "" : "";
+
     public TagFields()
     {
         Add("callsign", "Позывной", a => a.Callsign);
@@ -36,6 +42,23 @@ public sealed class TagFields
         Add("scratch", "Заметка диспетчера", a => a.Scratchpad);
         Add("ident", "IDENT", a => a.Ident ? "ID" : "");
         Add("modec", "Режим ответчика (пусто, если Mode C)", a => a.ModeC ? "" : "STBY");
+        Add("owner", "Кто ведёт борт (идентификатор позиции)", a => WithTrack(a, (t, w) => t.Owner.Length == 0 ? "" : w.ShortName(t.Owner)));
+        Add("ho", "Передача: кому / от кого (→EA, ←DC)", a => WithTrack(a, (t, w) =>
+            !t.HandoffPending ? ""
+            : t.HandoffFrom.Equals(w.Session.Me, StringComparison.OrdinalIgnoreCase) ? "→" + w.ShortName(t.HandoffTo)
+            : "←" + w.ShortName(t.HandoffFrom)));
+        Add("next", "Следующий диспетчер по сектору", a => WithTrack(a, (t, w) => w.NextController(t) is { } n ? "»" + w.ShortName(n) : ""));
+        Add("proc", "SID для вылета / STAR для прилёта", a => WithTrack(a, (t, w) => w.ProcedureOf(t)));
+        Add("sid", "SID", a => WithTrack(a, (t, w) => w.Procedures.Sid(t)));
+        Add("star", "STAR", a => WithTrack(a, (t, w) => w.Procedures.Star(t)));
+        Add("rwy", "ВПП (вылета для вылетающих, посадки для прилетающих)", a => WithTrack(a, (t, w) => w.RunwayOf(t)));
+        Add("drwy", "ВПП вылета", a => WithTrack(a, (t, w) => w.Procedures.DepartureRunway(t)));
+        Add("arwy", "ВПП посадки", a => WithTrack(a, (t, w) => w.Procedures.ArrivalRunway(t)));
+        Add("clr", "Флаг «разрешение получено»", a => a is Radar.Track { ClearanceReceived: true } ? "✓" : "");
+        Add("gstate", "Наземный статус (PUSH/TAXI/DEPA)", a => a is Radar.Track t ? t.GroundState : "");
+        Add("comm", "Связь: /r — только приём, /t — только текст", a => a is Radar.Track t && t.CommType.Length > 0 ? "/" + t.CommType.ToLowerInvariant() : "");
+        Add("warn", "Предупреждения: EMERG, DUPE, SQ, CLAM", a => WithTrack(a, (t, w) => Radar.Warnings.Text(t, w.WarningOf(t))));
+        Add("rules", "Правила полёта (I/V)", a => a is Radar.Track t ? t.Rules : "");
     }
 
     public IEnumerable<TagField> All => _fields.Values.OrderBy(f => f.Key);

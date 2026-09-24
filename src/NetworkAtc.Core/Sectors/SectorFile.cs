@@ -14,7 +14,13 @@ public sealed record Region(string Name, string? Color, IReadOnlyList<GeoPoint> 
 public sealed record SectorLabel(string Text, GeoPoint Position, string? Color, string Group = "");
 
 /// <summary>A controller position from the .ese [POSITIONS] section.</summary>
-public sealed record AtcPosition(string Callsign, string RadioName, string Frequency, string Identifier, string Prefix, string Suffix);
+public sealed record AtcPosition(string Callsign, string RadioName, string Frequency, string Identifier, string Prefix, string Suffix,
+    int? SquawkStart = null, int? SquawkEnd = null);
+
+public enum ProcedureKind { Sid, Star }
+
+/// <summary>A SID or STAR from the .ese [SIDSSTARS] section: SID:UUEE:24R:DEMO1A:SHR DEMO5.</summary>
+public sealed record Procedure(ProcedureKind Kind, string Airport, string Runway, string Name, IReadOnlyList<string> Route);
 
 /// <summary>An airspace sector from the .ese [AIRSPACE] section.</summary>
 public sealed record AirspaceSector(string Name, int Floor, int Ceiling, IReadOnlyList<string> Owners, IReadOnlyList<string> BorderLines);
@@ -47,6 +53,7 @@ public sealed class SectorFile
     public List<SectorLabel> FreeTexts { get; } = [];
     public Dictionary<string, List<GeoPoint>> SectorLines { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<AirspaceSector> Sectors { get; } = [];
+    public List<Procedure> Procedures { get; } = [];
 
     /// <summary>Non-fatal problems found while parsing (line number and reason).</summary>
     public List<string> Warnings { get; } = [];

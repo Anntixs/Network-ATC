@@ -76,6 +76,9 @@ public partial class SettingsWindow : Window
         ["Connect"] = "Подключение", ["TrackSelected"] = "Сопровождать выбранный", ["ClearSelection"] = "Снять выбор",
         ["ToggleDepartures"] = "Список вылета", ["ToggleArrivals"] = "Список прилёта", ["ToggleConflicts"] = "Конфликты (STCA)",
         ["ToggleAtc"] = "Диспетчеры", ["OpenSector"] = "Выбор сектора",
+        ["AssumeOrAccept"] = "Взять борт / принять передачу", ["HandoffNext"] = "Передать следующему диспетчеру",
+        ["ReleaseOrRefuse"] = "Отпустить борт / отклонить передачу", ["ToggleRoute"] = "Маршрут выбранного борта",
+        ["ActiveRunways"] = "Активные ВПП", ["ToggleSil"] = "Входящие (SIL)", ["ToggleSel"] = "Выходящие (SEL)",
     };
 
     private readonly TagFields _fields;
@@ -106,6 +109,7 @@ public partial class SettingsWindow : Window
         _keys = ActionTitles.Select(a => new KeyEntry(a.Key, a.Value, profile.KeyBindings.GetValueOrDefault(a.Key, ""))).ToList();
         KeyList.ItemsSource = _keys;
         AirportsBox.Text = string.Join(" ", profile.ActiveAirports);
+        ControllerInfoBox.Text = string.Join(Environment.NewLine, profile.ControllerInfo);
         AliasBox.Text = string.Join(Environment.NewLine, profile.Aliases.Select(a => $"{a.Key} = {a.Value}"));
 
         _registry = plugins.Registry;
@@ -255,6 +259,8 @@ public partial class SettingsWindow : Window
 
         Result.Theme = theme;
         Result.ActiveAirports = airports;
+        Result.ControllerInfo = ControllerInfoBox.Text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        if (Result.ClamFeet is < 100 or > 5000) { ErrorText.Text = "CLAM: 100–5000 фт"; Nav.SelectedIndex = 4; return; }
         if (ResetWindowsBox.IsChecked == true) Result.Windows = Profile.DefaultWindows();
         Result.TagClicks = ((IEnumerable<ClickEntry>)ClickList.ItemsSource).ToDictionary(
             c => c.Field, c => new TagClickBinding(c.Left, c.Right), StringComparer.OrdinalIgnoreCase);

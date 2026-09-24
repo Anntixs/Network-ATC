@@ -420,7 +420,11 @@
       "frequency": "129.800",
       "identifier": "ED",
       "prefix": "UUEE",
-      "suffix": "DEL"
+      "suffix": "DEL",
+      "squawks": [
+        4101,
+        4177
+      ]
     },
     {
       "callsign": "UUEE_GND",
@@ -428,7 +432,11 @@
       "frequency": "121.700",
       "identifier": "EG",
       "prefix": "UUEE",
-      "suffix": "GND"
+      "suffix": "GND",
+      "squawks": [
+        4101,
+        4177
+      ]
     },
     {
       "callsign": "UUEE_TWR",
@@ -436,7 +444,11 @@
       "frequency": "131.500",
       "identifier": "ET",
       "prefix": "UUEE",
-      "suffix": "TWR"
+      "suffix": "TWR",
+      "squawks": [
+        4101,
+        4177
+      ]
     },
     {
       "callsign": "UUEE_APP",
@@ -444,7 +456,11 @@
       "frequency": "128.000",
       "identifier": "EA",
       "prefix": "UUEE",
-      "suffix": "APP"
+      "suffix": "APP",
+      "squawks": [
+        4201,
+        4277
+      ]
     },
     {
       "callsign": "DEMO_CTR",
@@ -452,7 +468,11 @@
       "frequency": "132.000",
       "identifier": "DC",
       "prefix": "DEMO",
-      "suffix": "CTR"
+      "suffix": "CTR",
+      "squawks": [
+        4301,
+        4377
+      ]
     }
   ],
   "sectorLines": {
@@ -475,6 +495,26 @@
         55.666667,
         36.833333
       ]
+    ],
+    "DEMO_N": [
+      [
+        57,
+        35.5
+      ],
+      [
+        57,
+        39.5
+      ]
+    ],
+    "DEMO_S": [
+      [
+        55,
+        39.5
+      ],
+      [
+        55,
+        35.5
+      ]
     ]
   },
   "sectors": [
@@ -489,6 +529,101 @@
       "borders": [
         "UUEE_TMA_N",
         "UUEE_TMA_S"
+      ]
+    },
+    {
+      "name": "DEMO_CTR",
+      "floor": 0,
+      "ceiling": 66000,
+      "owners": [
+        "DC"
+      ],
+      "borders": [
+        "DEMO_N",
+        "DEMO_S"
+      ]
+    }
+  ],
+  "procedures": [
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "24R",
+      "name": "DEMO1A",
+      "route": [
+        "SHR",
+        "DEMO5"
+      ]
+    },
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "24R",
+      "name": "DEMO4A",
+      "route": [
+        "SHR",
+        "DEMO4"
+      ]
+    },
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "06L",
+      "name": "DEMO1B",
+      "route": [
+        "SHR",
+        "DEMO5"
+      ]
+    },
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "06L",
+      "name": "DEMO4B",
+      "route": [
+        "SHR",
+        "DEMO4"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "24L",
+      "name": "DEMO2A",
+      "route": [
+        "DEMO2",
+        "DEMO1",
+        "SHR"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "24L",
+      "name": "DEMO3A",
+      "route": [
+        "DEMO3",
+        "SHR"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "06R",
+      "name": "DEMO2B",
+      "route": [
+        "DEMO2",
+        "SHR"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "06R",
+      "name": "DEMO3B",
+      "route": [
+        "DEMO3",
+        "SHR"
       ]
     }
   ]

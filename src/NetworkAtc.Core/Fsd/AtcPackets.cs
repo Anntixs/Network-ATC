@@ -22,7 +22,8 @@ public sealed record AtcReport(string Callsign, int FrequencyKhz, Facility Facil
 
 public sealed record FiledPlan(
     string Callsign, string Rules, string AircraftType, int TrueAirspeed, string Departure, string DepartureTime,
-    string Altitude, string Destination, string Alternate, string Remarks, string Route);
+    string Altitude, string Destination, string Alternate, string Remarks, string Route,
+    string EnrouteHours = "0", string EnrouteMinutes = "0", string FuelHours = "0", string FuelMinutes = "0");
 
 /// <summary>Builds and parses the FSD packets a controller client uses.</summary>
 public static class AtcPackets
@@ -80,6 +81,34 @@ public static class AtcPackets
     {
         if (p.Command != "$FP" || p.Fields.Length < 17) return null;
         int.TryParse(p[4], NumberStyles.Integer, Inv, out var tas);
-        return new FiledPlan(p[0], p[2], p[3], tas, p[5], p[6], p[8], p[9], p[14], p[15], string.Join(':', p.Fields.Skip(16)));
+        return new FiledPlan(p[0], p[2], p[3], tas, p[5], p[6], p[8], p[9], p[14], p[15], string.Join(':', p.Fields.Skip(16)),
+            p[10], p[11], p[12], p[13]);
+    }
+
+    /// <summary>The address EuroScope uses for data meant for every controller.</summary>
+    public const string AllControllers = "@94835";
+
+    /// <summary>$CQ&lt;me&gt;:@94835:&lt;kind&gt;:&lt;callsign&gt;[:value] — shared coordination data (IT, DR, SC, TA, BC, WH...).</summary>
+    public static string Shared(string from, string kind, string callsign, string? value = null) =>
+        $"$CQ{from}:{AllControllers}:{kind}:{callsign}" + (value == null ? "" : ":" + Clean(value));
+
+    public static string Handoff(string from, string to, string callsign) => $"$HO{from}:{to}:{callsign}";
+
+    public static string HandoffAccept(string from, string to, string callsign) => $"$HA{from}:{to}:{callsign}";
+
+    /// <summary>#PC&lt;me&gt;:&lt;to&gt;:CCP:&lt;kind&gt;:&lt;callsign&gt; — controller-to-controller coordination (HC cancel/refuse, PT point-out).</summary>
+    public static string Coordination(string from, string to, string kind, string callsign) => $"#PC{from}:{to}:CCP:{kind}:{callsign}";
+
+    /// <summary>$AM — a controller amends a pilot's flight plan; the server passes it to every controller.</summary>
+    public static string Amend(string from, FiledPlan fp) => string.Join(':',
+        $"$AM{from}", "SERVER", fp.Callsign, Clean(fp.Rules), Clean(fp.AircraftType), fp.TrueAirspeed.ToString(Inv), Clean(fp.Departure),
+        Clean(fp.DepartureTime), "0", Clean(fp.Altitude), Clean(fp.Destination), Clean(fp.EnrouteHours), Clean(fp.EnrouteMinutes),
+        Clean(fp.FuelHours), Clean(fp.FuelMinutes), Clean(fp.Alternate), Clean(fp.Remarks), Clean(fp.Route));
+
+    /// <summary>Answer to an ATIS query: one $CR ... ATIS:T line per text line, then E with the count.</summary>
+    public static IEnumerable<string> AtisReply(string from, string to, IReadOnlyList<string> lines)
+    {
+        foreach (var l in lines) yield return $"$CR{from}:{to}:ATIS:T:{Clean(l)}";
+        yield return $"$CR{from}:{to}:ATIS:E:{lines.Count + 1}";
     }
 }

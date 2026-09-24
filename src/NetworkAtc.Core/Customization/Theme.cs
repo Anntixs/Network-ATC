@@ -51,6 +51,20 @@ public sealed class Theme
     public string Conflict { get; set; } = "#FF5A5F";
     public string Emergency { get; set; } = "#FF3B30";
 
+    // EuroScope tag states: TagText is "not concerned", TagTextTracked is "assumed".
+    public string TagConcerned { get; set; } = "#DCE8F1";
+    public string TagTransferToMe { get; set; } = "#FF9F1C";
+    public string TagTransferFromMe { get; set; } = "#6FD3FF";
+    public string TagRedundant { get; set; } = "#6E8494";
+    /// <summary>CLAM, DUPE and wrong-code markers.</summary>
+    public string Warning { get; set; } = "#FFB020";
+
+    // Tools.
+    public string RouteLine { get; set; } = "#C58BE8";
+    public string Halo { get; set; } = "#FF9F1C";
+    public string Measure { get; set; } = "#F2C94C";
+    public string Centerline { get; set; } = "#56707F";
+
     public Theme Clone() => (Theme)MemberwiseClone();
 
     /// <summary>Color properties by name, for the settings editor.</summary>
@@ -63,6 +77,19 @@ public sealed class Theme
     public static IReadOnlyList<Theme> BuiltIn { get; } =
     [
         new Theme(),
+        new Theme
+        {
+            // Close to EuroScope's own palette, for controllers who want the classic look.
+            Name = "EuroScope Classic",
+            Background = "#2B3238", Panel = "#353E46", PanelBorder = "#4A555F", Text = "#E6E6E6", MutedText = "#9AA3AB",
+            Accent = "#8FB8D8", RadarBackground = "#3A4852", Artcc = "#6B7C88", ArtccHigh = "#5E6F7B", ArtccLow = "#5E6F7B",
+            Sid = "#5A8A6A", Star = "#8A7A5A", LowAirway = "#4C5C68", HighAirway = "#4C5C68", Geo = "#56666F", Region = "#34424B",
+            Runway = "#E6E6E6", Airport = "#B4BEC6", Fix = "#6F808C", Vor = "#8FA8BD", Ndb = "#A89BBD", Label = "#A3AFB8",
+            SectorLine = "#7F93A3", RangeRings = "#44535D", Target = "#E6E6E6", TargetTracked = "#FFFFFF", TargetOnGround = "#9AA3AB",
+            TagText = "#9AA8B2", TagTextTracked = "#FFFFFF", TagConcerned = "#E6E6E6", TagSelected = "#FFE24A",
+            TagTransferToMe = "#FF8C00", TagTransferFromMe = "#00D8FF", TagRedundant = "#7F8F9A", History = "#76889A",
+            PredictionLine = "#A3AFB8", Centerline = "#6F808C",
+        },
         new Theme
         {
             Name = "Midnight",

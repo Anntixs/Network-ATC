@@ -67,7 +67,11 @@ public static class NativeSector
         s.Labels.AddRange((doc.Labels ?? []).Select(l => new SectorLabel(l.Text ?? "", ToPoint(l.At), l.Color, l.Group ?? "")));
         s.FreeTexts.AddRange((doc.FreeTexts ?? []).Select(l => new SectorLabel(l.Text ?? "", ToPoint(l.At), l.Color, l.Group ?? "")));
         s.Positions.AddRange((doc.Positions ?? []).Select(p =>
-            new AtcPosition(p.Callsign ?? "", p.RadioName ?? "", p.Frequency ?? "", p.Identifier ?? "", p.Prefix ?? "", p.Suffix ?? "")));
+            new AtcPosition(p.Callsign ?? "", p.RadioName ?? "", p.Frequency ?? "", p.Identifier ?? "", p.Prefix ?? "", p.Suffix ?? "",
+                p.Squawks is [var from, var to] ? from : null, p.Squawks is [_, var end] ? end : null)));
+        s.Procedures.AddRange((doc.Procedures ?? []).Select(p => new Procedure(
+            p.Kind?.Equals("STAR", StringComparison.OrdinalIgnoreCase) == true ? ProcedureKind.Star : ProcedureKind.Sid,
+            p.Airport ?? "", p.Runway ?? "", p.Name ?? "", p.Route ?? [])));
         foreach (var (id, pts) in doc.SectorLines ?? []) s.SectorLines[id] = pts.Select(ToPoint).ToList();
         s.Sectors.AddRange((doc.Sectors ?? []).Select(a => new AirspaceSector(a.Name ?? "", a.Floor, a.Ceiling, a.Owners ?? [], a.Borders ?? [])));
         if (s.Center == default && s.Airports.Count > 0) s.Center = s.Airports[0].Position;
@@ -110,6 +114,11 @@ public static class NativeSector
             Positions = s.Positions.Select(p => new PositionDto
             {
                 Callsign = p.Callsign, RadioName = p.RadioName, Frequency = p.Frequency, Identifier = p.Identifier, Prefix = p.Prefix, Suffix = p.Suffix,
+                Squawks = p.SquawkStart is { } from && p.SquawkEnd is { } to ? [from, to] : null,
+            }).ToList(),
+            Procedures = s.Procedures.Count == 0 ? null : s.Procedures.Select(p => new ProcedureDto
+            {
+                Kind = p.Kind == ProcedureKind.Star ? "STAR" : "SID", Airport = p.Airport, Runway = p.Runway, Name = p.Name, Route = p.Route.ToList(),
             }).ToList(),
             SectorLines = s.SectorLines.ToDictionary(kv => kv.Key, kv => kv.Value.Select(FromPoint).ToList()),
             Sectors = s.Sectors.Select(a => new AirspaceDto
@@ -171,6 +180,16 @@ public static class NativeSector
         public List<PositionDto>? Positions { get; set; }
         public Dictionary<string, List<double[]>>? SectorLines { get; set; }
         public List<AirspaceDto>? Sectors { get; set; }
+        public List<ProcedureDto>? Procedures { get; set; }
+    }
+
+    internal sealed class ProcedureDto
+    {
+        public string? Kind { get; set; }
+        public string? Airport { get; set; }
+        public string? Runway { get; set; }
+        public string? Name { get; set; }
+        public List<string>? Route { get; set; }
     }
 
     internal sealed class InfoDto
@@ -238,6 +257,8 @@ public static class NativeSector
         public string? Identifier { get; set; }
         public string? Prefix { get; set; }
         public string? Suffix { get; set; }
+        /// <summary>Squawk range of the position, [first, last] (octal codes written as numbers, e.g. [4201, 4277]).</summary>
+        public int[]? Squawks { get; set; }
     }
 
     internal sealed class AirspaceDto

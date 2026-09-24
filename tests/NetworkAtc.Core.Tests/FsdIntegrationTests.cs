@@ -75,6 +75,70 @@ public class FsdIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task TwoControllersCoordinateThroughTheServer()
+    {
+        if (string.IsNullOrEmpty(Build)) return;
+        var dir = Directory.CreateTempSubdirectory("natc");
+        string db = Path.Combine(dir.FullName, "net.db");
+        Run("skynet-admin", $"--db {db} adduser 1000001 \"Pilot One\" pw1");
+        Run("skynet-admin", $"--db {db} adduser 1000002 \"Approach\" pw2 C1");
+        Run("skynet-admin", $"--db {db} adduser 1000003 \"Centre\" pw3 C1");
+        int port = FreePort(), httpPort = FreePort();
+        using var fsd = Process.Start(new ProcessStartInfo(Path.Combine(Build, "skynet-fsd"),
+            $"--db {db} --host 127.0.0.1 --port {port} --http-port {httpPort}") { RedirectStandardError = true })!;
+        try
+        {
+            await Task.Delay(300);
+            var app = new AtcSession();
+            var ctr = new AtcSession();
+            var ctrEvents = new List<CoordinationEvent>();
+            var appEvents = new List<CoordinationEvent>();
+            ctr.Coordination += (_, e) => { lock (ctrEvents) ctrEvents.Add(e); };
+            app.Coordination += (_, e) => { lock (appEvents) appEvents.Add(e); };
+            await app.ConnectAsync(new AtcConnectInfo("127.0.0.1", port, 1000002, "pw2", "Approach", 5,
+                "UUEE_APP", 128000, Facility.Approach, 100, new GeoPoint(55.97, 37.41)));
+            await ctr.ConnectAsync(new AtcConnectInfo("127.0.0.1", port, 1000003, "pw3", "Centre", 5,
+                "DEMO_CTR", 132000, Facility.Centre, 300, new GeoPoint(55.97, 37.41)));
+            var pilot = new FsdClient();
+            await pilot.ConnectAsync("127.0.0.1", port, "#APAFL1:SERVER:1000001:pw1:1:100:1:Pilot One");
+            await pilot.SendAsync("@N:AFL1:2000:1:56.000000:37.400000:8000:250:0:0");
+            await WaitFor(() => app.Find("AFL1") is { LastUpdate.Ticks: > 0 } && ctr.Find("AFL1") is { LastUpdate.Ticks: > 0 }
+                                && app.Controllers.Count == 1);
+
+            var a = app.Find("AFL1")!;
+            var c = ctr.Find("AFL1")!;
+            Assert.Null(await app.AssumeAsync(a));
+            await app.AnnotateAsync(a, Annotation.ClearedAltitude, "12000");
+            await WaitFor(() => c.Owner == "UUEE_APP" && c.ClearedAltitude == 12000);
+
+            Assert.Null(await app.HandoffAsync(a, "DEMO_CTR"));
+            await WaitFor(() => c.HandoffPending);
+            lock (ctrEvents) Assert.Contains(ctrEvents, e => e.Kind == CoordinationKind.HandoffRequested && e.Peer == "UUEE_APP");
+            Assert.Null(await ctr.AcceptHandoffAsync(c));
+            await WaitFor(() => a.Owner == "DEMO_CTR" && !a.HandoffPending);
+            Assert.False(a.IsTracked);
+            Assert.True(c.IsTracked);
+            lock (appEvents) Assert.Contains(appEvents, e => e.Kind == CoordinationKind.HandoffAccepted);
+
+            await pilot.DisconnectAsync("#DPAFL1:1000001");
+            await app.DisconnectAsync();
+            await ctr.DisconnectAsync();
+        }
+        finally
+        {
+            fsd.Kill();
+            dir.Delete(true);
+        }
+    }
+
+    private static async Task WaitFor(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline) await Task.Delay(50);
+        Assert.True(condition());
+    }
+
     private static void Run(string tool, string args)
     {
         using var p = Process.Start(new ProcessStartInfo(Path.Combine(Build!, tool), args) { RedirectStandardOutput = true })!;
