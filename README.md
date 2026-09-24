@@ -184,7 +184,9 @@ dotnet build NetworkAtc.sln -c Release
 dotnet run --project src/NetworkAtc.App -c Release
 ```
 
-Готовая сборка (self-contained, .NET не нужен) — в [Actions → Release](../../actions/workflows/release.yml), архив в разделе *Artifacts*. Теги `v*` публикуются в *Releases*.
+**Установщик:** `Network-ATC-Setup-<версия>.exe` в [Releases](../../releases). .NET устанавливать не нужно, он уже внутри. Ярлык появится в меню «Пуск» (по желанию и на рабочем столе). Удаление — через «Установка и удаление программ»; профили и настройки при этом сохраняются. Там же лежит zip-архив без установки.
+
+Чтобы выпустить релиз, поставьте тег `v<версия>` на `main` (например `v1.0.0`; на GitHub: *Releases → Draft a new release → Choose a tag*). Workflow [Release](../../actions/workflows/release.yml) соберёт установщик и zip и приложит их к релизу. Установщик каждой сборки также лежит в *Artifacts* запуска.
 
 ## Структура
 
