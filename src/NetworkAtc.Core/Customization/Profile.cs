@@ -7,17 +7,21 @@ namespace NetworkAtc.Core.Customization;
 
 public sealed class TagLayouts
 {
-    /// <summary>Aircraft nobody works.</summary>
+    /// <summary>Aircraft nobody works, or someone else works.</summary>
     public string Untracked { get; set; } = DefaultUntracked;
-    /// <summary>Aircraft the controller works.</summary>
+    /// <summary>Aircraft the controller works or that are being handed over to or from them.</summary>
     public string Tracked { get; set; } = DefaultTracked;
-    /// <summary>Selected or hovered aircraft.</summary>
+    /// <summary>
+    /// Extra lines added under the tag while the mouse is over the aircraft or its tag, as in EuroScope.
+    /// The lines above stay where they are, so the field under the mouse never moves.
+    /// </summary>
     public string Detailed { get; set; } = DefaultDetailed;
+    /// <summary>Warnings (EMERG, CLAM, DUPE, SQ) above the tag, in the warning color.</summary>
+    public bool ShowWarnings { get; set; } = true;
 
-    public const string DefaultUntracked = "{warn}\n{callsign} {ho}\n{fl}{vs} {gs10}";
-    public const string DefaultTracked = "{warn}\n{callsign} {comm}{wtc}\n{fl}{vs} {cfl|---} {ho}\n{gs10} {dest} {ahdg} {aspd}";
-    public const string DefaultDetailed =
-        "{warn}\n{callsign} {type}/{wtc} {squawk} {asq}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{proc|SID/STAR} {rwy} {owner|—} {next}\n{scratch|+ заметка}";
+    public const string DefaultUntracked = "{callsign} {ho}\n{alt}{vs} {gs10}";
+    public const string DefaultTracked = "{callsign} {comm} {ho}\n{alt}{vs} {cfl|---} {ahdg}\n{gs10} {type} {aspd}";
+    public const string DefaultDetailed = "{dep} {dest} {rfl} {squawk}\n{proc|SID/STAR} {rwy} {next}\n{scratch|+ заметка}";
 
     /// <summary>The layouts before EuroScope coordination fields existed (profile version 2).</summary>
     public static readonly string[] OldDefaults =
@@ -26,6 +30,15 @@ public sealed class TagLayouts
         "{callsign} {wtc}\n{fl}{vs} {cfl|---}\n{gs10} {dest} {ahdg} {aspd}",
         "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{scratch|+ заметка}",
     ];
+
+    /// <summary>The defaults of profile versions 3–4 (the detailed tag was a whole separate tag then).</summary>
+    public static readonly string[] Version3Defaults =
+    [
+        "{warn}\n{callsign} {ho}\n{fl}{vs} {gs10}",
+        "{warn}\n{callsign} {comm}{wtc}\n{fl}{vs} {cfl|---} {ho}\n{gs10} {dest} {ahdg} {aspd}",
+        "{warn}\n{callsign} {type}/{wtc} {squawk} {asq}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{proc|SID/STAR} {rwy} {owner|—} {next}\n{scratch|+ заметка}",
+    ];
+
     public double FontSize { get; set; } = 11;
     public string FontFamily { get; set; } = "Cascadia Mono, Consolas";
     public bool ShowTagLeader { get; set; } = true;
@@ -145,7 +158,7 @@ public sealed class PanelSettings
 public sealed class Profile
 {
     /// <summary>Profile format version, used to migrate old profiles.</summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
     public int Version { get; set; }
 
     public string Name { get; set; } = "Default";
@@ -170,6 +183,8 @@ public sealed class Profile
     public Dictionary<string, Sectors.RunwayUse> ActiveRunways { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Current ATIS letter per airport.</summary>
     public Dictionary<string, string> AtisLetters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The controller's ATIS stations (UUEE_ATIS…): frequency, text, voice.</summary>
+    public List<Atis.AtisSettings> Atis { get; set; } = [];
     /// <summary>Controller info (ATIS) lines sent to pilots on request; aliases variables like $atiscode(UUEE) are expanded.</summary>
     public List<string> ControllerInfo { get; set; } = ["$mycallsign $myfreq", "Информация $atiscode($myairport)"];
     public SoundSettings Sounds { get; set; } = new();
@@ -182,6 +197,8 @@ public sealed class Profile
     public Dictionary<string, WindowLayout> Windows { get; set; } = DefaultWindows();
 
     public List<RecentSector> RecentSectors { get; set; } = [];
+    /// <summary>EuroScope plugins of the last imported .prf and what became of each (shown in the ПЛАГИНЫ menu).</summary>
+    public List<string> ImportedPlugins { get; set; } = [];
     public bool ShowSectorSelection { get; set; } = true;
 
     public static Dictionary<string, WindowLayout> DefaultWindows() => new(StringComparer.OrdinalIgnoreCase)
@@ -346,6 +363,16 @@ public sealed class Profile
                     if (p.Tags.Tracked == TagLayouts.OldDefaults[1]) p.Tags.Tracked = TagLayouts.DefaultTracked;
                     if (p.Tags.Detailed == TagLayouts.OldDefaults[2]) p.Tags.Detailed = TagLayouts.DefaultDetailed;
                 }
+                if (p.Version < 5)
+                {
+                    // Version 5: EuroScope tags. Untouched default layouts (of any older version) are replaced;
+                    // the detailed layout became extra lines under the normal tag.
+                    p.Tags ??= new TagLayouts();
+                    if (TagLayouts.OldDefaults.Contains(p.Tags.Untracked) || p.Tags.Untracked == TagLayouts.Version3Defaults[0]) p.Tags.Untracked = TagLayouts.DefaultUntracked;
+                    if (TagLayouts.OldDefaults.Contains(p.Tags.Tracked) || p.Tags.Tracked == TagLayouts.Version3Defaults[1]) p.Tags.Tracked = TagLayouts.DefaultTracked;
+                    if (TagLayouts.OldDefaults.Contains(p.Tags.Detailed) || p.Tags.Detailed == TagLayouts.Version3Defaults[2]) p.Tags.Detailed = TagLayouts.DefaultDetailed;
+                    p.Tags.ShowWarnings = true;
+                }
                 if (p.Version < 4)
                 {
                     // Version 4: radio voice. Older profiles have no voice settings: start from the defaults
@@ -360,6 +387,8 @@ public sealed class Profile
                 p.ActiveRunways = new Dictionary<string, Sectors.RunwayUse>(p.ActiveRunways ?? [], StringComparer.OrdinalIgnoreCase);
                 p.AtisLetters = new Dictionary<string, string>(p.AtisLetters ?? [], StringComparer.OrdinalIgnoreCase);
                 p.ControllerInfo ??= [];
+                p.Atis ??= [];
+                p.Atis.RemoveAll(a => a == null);
                 p.Sounds ??= new SoundSettings();
                 foreach (var (k, v) in DefaultTagClicks()) p.TagClicks.TryAdd(k, v);
                 return p;

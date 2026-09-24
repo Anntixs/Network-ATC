@@ -112,8 +112,9 @@
             <TextBox Text="{Binding Tags.Untracked, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="54" FontFamily="{StaticResource MonoFont}" TextChanged="OnTagChanged" VerticalContentAlignment="Top"/>
             <TextBlock Text="Борт на сопровождении" Style="{StaticResource FieldLabel}"/>
             <TextBox Text="{Binding Tags.Tracked, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70" FontFamily="{StaticResource MonoFont}" TextChanged="OnTagChanged" VerticalContentAlignment="Top"/>
-            <TextBlock Text="Выбранный борт (подробный)" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="Строки при наведении мыши (добавляются снизу)" Style="{StaticResource FieldLabel}"/>
             <TextBox Text="{Binding Tags.Detailed, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="86" FontFamily="{StaticResource MonoFont}" TextChanged="OnTagChanged" VerticalContentAlignment="Top"/>
+            <CheckBox Content="Предупреждения (EMERG, CLAM, DUPE, SQ) над тегом" IsChecked="{Binding Tags.ShowWarnings}" Margin="0,8,0,0"/>
             <UniformGrid Columns="2" Margin="0,4,0,0">
               <StackPanel Margin="0,0,8,0">
                 <TextBlock Text="Шрифт" Style="{StaticResource FieldLabel}"/>

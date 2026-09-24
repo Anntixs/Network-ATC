@@ -71,7 +71,9 @@ public static class NativeSector
                 p.Squawks is [var from, var to] ? from : null, p.Squawks is [_, var end] ? end : null)));
         s.Procedures.AddRange((doc.Procedures ?? []).Select(p => new Procedure(
             p.Kind?.Equals("STAR", StringComparison.OrdinalIgnoreCase) == true ? ProcedureKind.Star : ProcedureKind.Sid,
-            p.Airport ?? "", p.Runway ?? "", p.Name ?? "", p.Route ?? [])));
+            // Names and points in capitals, as the .ese reader keeps them, so ".sid demo1a" finds DEMO1A.
+            (p.Airport ?? "").ToUpperInvariant(), (p.Runway ?? "").ToUpperInvariant(), (p.Name ?? "").ToUpperInvariant(),
+            (p.Route ?? []).Select(x => x.ToUpperInvariant()).ToList())));
         foreach (var (id, pts) in doc.SectorLines ?? []) s.SectorLines[id] = pts.Select(ToPoint).ToList();
         s.Sectors.AddRange((doc.Sectors ?? []).Select(a => new AirspaceSector(a.Name ?? "", a.Floor, a.Ceiling, a.Owners ?? [], a.Borders ?? [])));
         if (s.Center == default && s.Airports.Count > 0) s.Center = s.Airports[0].Position;
@@ -265,7 +267,8 @@ public static class NativeSector
     {
         public string? Name { get; set; }
         public int Floor { get; set; }
-        public int Ceiling { get; set; }
+        /// <summary>Upper limit, feet; a sector written without one reaches up to the top, as in .ese.</summary>
+        public int Ceiling { get; set; } = 99999;
         public List<string>? Owners { get; set; }
         public List<string>? Borders { get; set; }
     }

@@ -85,6 +85,10 @@ public partial class MainWindow : Window
     private readonly Workspace _workspace;
     private readonly SoundService _sounds;
     private readonly VoiceService _voice;
+    private readonly NetworkAtc.Core.Atis.AtisService _atisService;
+    private readonly AtisManager _atis;
+    private AtisWindow? _atisWindow;
+    private string _atisLettersSeen = "";
     private bool _updatingPlan;
     private int _lastConflictCount;
     private bool _wasConnected;
@@ -152,6 +156,18 @@ public partial class MainWindow : Window
         _commands.Changed += (_, _) => { _dirty = true; Dispatcher.BeginInvoke(RefreshWeather); };
         _session.Coordination += (_, e) => Dispatcher.BeginInvoke(() => OnCoordination(e));
         _workspace.Weather.Updated += (_, _) => Dispatcher.BeginInvoke(RefreshWeather);
+
+        // ATIS stations: their own connections (UUEE_ATIS), the letter moves on with a new METAR, the voice follows.
+        _atisService = new NetworkAtc.Core.Atis.AtisService(() => _profile, text => _commands.ExpandVariables(text), s => _workspace.Weather.Get(s));
+        _atis = new AtisManager(_atisService, () => _profile, () => _session.IsConnected ? _session.Info : null,
+            icao => Radar.Sector?.Airports.FirstOrDefault(a => a.Name.Equals(icao, StringComparison.OrdinalIgnoreCase))?.Position,
+            (text, error) => Dispatcher.BeginInvoke(() => { if (error) Error(text); else Info(text); }));
+        _atis.Changed += () => Dispatcher.BeginInvoke(UpdateAtisButton);
+        _workspace.Weather.Updated += (_, m) =>
+        {
+            _atisService.OnMetar(m);
+            _atis.Refresh(m.Station);
+        };
         _workspace.Weather.Enabled = _profile.FetchMetar;
         _workspace.Weather.Start();
 
@@ -223,7 +239,7 @@ public partial class MainWindow : Window
 
     private void LoadPlugins()
     {
-        _plugins.LoadFrom(Path.Combine(Profile.DefaultDirectory, "plugins"));
+        _plugins.LoadFrom(PluginFolder);
         _plugins.LoadFrom(Path.Combine(AppContext.BaseDirectory, "plugins"));
         foreach (var p in _plugins.Plugins) Info($"Плагин: {p.Plugin.Name} {p.Plugin.Version}");
         foreach (var e in _plugins.Errors) Error($"Плагин {Path.GetFileName(e.File)}: {e.Reason}");
@@ -303,6 +319,7 @@ public partial class MainWindow : Window
         if (_frameCount % 4 == 0)
         {
             ClockText.Text = DateTime.UtcNow.ToString("HH:mm:ss") + "Z";
+            CheckAtisLetters();
             AselText.Text = Radar.Selected?.Callsign ?? "—";
             TxText.Text = _session.Info is { } i ? "TX " + Frequency.Format(i.FrequencyKhz) : "";
             UpdateVoiceRadios();
@@ -986,6 +1003,7 @@ public partial class MainWindow : Window
         ConnectText.Text = connected ? "В СЕТИ" : "ПОДКЛЮЧИТЬСЯ";
         ConnectDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "SuccessBrush" : "DangerBrush");
         StationText.Text = connected && _session.Info is { } i ? $"{i.Callsign}  {Frequency.Format(i.FrequencyKhz)}" : "";
+        StationBox.Visibility = StationText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (!connected) AtcList.ItemsSource = null;
         // Voice follows the network connection; its failures never break the network session.
         if (connected && !_wasConnected && _session.Info is { } info)
@@ -996,6 +1014,7 @@ public partial class MainWindow : Window
         else if (!connected)
         {
             _voice.Stop();
+            _ = _atis.DisconnectAllAsync();
         }
         if (connected != _wasConnected) _sounds.Play(connected ? SoundEvent.Connected : SoundEvent.Disconnected);
         _wasConnected = connected;
@@ -1185,6 +1204,164 @@ public partial class MainWindow : Window
         }
     }
 
+    private static string PluginFolder => Path.Combine(Profile.DefaultDirectory, "plugins");
+
+    private static MenuItem MenuEntry(string header, Action click, string? gesture = null)
+    {
+        var item = new MenuItem { Header = header, InputGestureText = gesture ?? "" };
+        item.Click += (_, _) => click();
+        return item;
+    }
+
+    /// <summary>ФАЙЛ: sectors, the EuroScope profile import and the recent sectors.</summary>
+    private void OnFileClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = FileButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        menu.Items.Add(MenuEntry("Открыть сектор…", () => OnOpenSectorClick(this, new RoutedEventArgs()), "Ctrl+O"));
+        menu.Items.Add(MenuEntry("Импорт профиля EuroScope (.prf)…", ImportEuroScopeProfile));
+        var recent = _profile.RecentSectors.Where(r => File.Exists(r.Path)).Take(8).ToList();
+        if (recent.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var r in recent)
+                menu.Items.Add(MenuEntry($"{r.Name}  ·  {Path.GetFileName(r.Path)}", () =>
+                {
+                    _profile.ViewCenterLatitude = 0;
+                    LoadSector(r.Path);
+                    SaveProfile();
+                }));
+        }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("Выход", Close, "Alt+F4"));
+        menu.IsOpen = true;
+    }
+
+    /// <summary>ПЛАГИНЫ: loaded Network-ATC plugins, their errors and the map layers taken from EuroScope plugins.</summary>
+    /// <summary>ATIS: the window of the controller's ATIS stations (it stays open while working).</summary>
+    private void OnAtisClick(object sender, RoutedEventArgs e)
+    {
+        if (_atisWindow is { IsLoaded: true })
+        {
+            _atisWindow.Activate();
+            return;
+        }
+        _atisWindow = new AtisWindow(_profile, _atis, SaveProfile) { Owner = this };
+        _atisWindow.Closed += (_, _) => _atisWindow = null;
+        _atisWindow.Show();
+    }
+
+    private void UpdateAtisButton()
+    {
+        int n = _atis.ConnectedCount;
+        AtisDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, n > 0 ? "SuccessBrush" : "MutedBrush");
+        AtisLabel.Text = n > 1 ? $"ATIS ×{n}" : "ATIS";
+        RefreshWeather();
+    }
+
+    /// <summary>Letters changed from anywhere (.atis, the runways window, a new METAR): the ATIS on the air speaks the new one.</summary>
+    private void CheckAtisLetters()
+    {
+        string now = string.Join(",", _profile.AtisLetters.OrderBy(kv => kv.Key).Select(kv => kv.Key + kv.Value));
+        if (now == _atisLettersSeen) return;
+        var before = _atisLettersSeen.Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+        _atisLettersSeen = now;
+        foreach (var entry in now.Split(',', StringSplitOptions.RemoveEmptyEntries).Where(e => !before.Contains(e)))
+            _atis.Refresh(entry[..^1]);
+    }
+
+    private void OnPluginsClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = PluginsButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        if (_plugins.Plugins.Count == 0 && _plugins.Errors.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "Плагинов Network-ATC нет", IsEnabled = false });
+        foreach (var p in _plugins.Plugins)
+            menu.Items.Add(new MenuItem { Header = $"{p.Plugin.Name}  {p.Plugin.Version}", IsEnabled = false });
+        foreach (var err in _plugins.Errors)
+            menu.Items.Add(new MenuItem { Header = $"✕ {Path.GetFileName(err.File)}: {err.Reason}", IsEnabled = false });
+        if (_profile.ImportedPlugins.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(new MenuItem { Header = "Из профиля EuroScope", IsEnabled = false });
+            foreach (var name in _profile.ImportedPlugins)
+                menu.Items.Add(new MenuItem { Header = "    " + name, IsEnabled = false });
+        }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("Открыть папку плагинов", () =>
+        {
+            Directory.CreateDirectory(PluginFolder);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(PluginFolder) { UseShellExecute = true });
+        }));
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Imports a whole EuroScope profile: sector, symbology, tags, settings, aliases, the first ASR and the data
+    /// of TopSky, Ground Radar and CCAMS. The sector with the plugin maps is saved as .natc so the maps stay.
+    /// </summary>
+    private void ImportEuroScopeProfile()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Профиль EuroScope", Filter = "Профиль EuroScope (*.prf)|*.prf|Все файлы|*.*" };
+        if (dialog.ShowDialog(this) != true) return;
+        NetworkAtc.Core.Import.EuroScopeImportResult result;
+        try
+        {
+            result = NetworkAtc.Core.Import.EuroScopeImport.Import(dialog.FileName, _profile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error($"Импорт профиля: {ex.Message}");
+            return;
+        }
+        try
+        {
+            var folder = Path.Combine(Profile.DefaultDirectory, "sectors");
+            Directory.CreateDirectory(folder);
+            result.SaveNativeSector(Path.Combine(folder, result.Source.Name + ".natc"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            result.Report.Warn($"Сектор с картами плагинов не сохранён: {ex.Message}");
+        }
+        _profile = result.Profile;
+        ApplyProfile();
+        LoadSector(_profile.SectorFile);
+        SaveProfile();
+        _dirty = true;
+        Info($"Профиль EuroScope «{result.Source.Name}» импортирован: {result.Report.Imported.Count()} импортировано, " +
+             $"{result.Report.Skipped.Count()} пропущено, {result.Report.Warnings.Count()} предупреждений");
+        ShowImportReport(result.Source.Name, result.Report);
+    }
+
+    private void ShowImportReport(string name, NetworkAtc.Core.Import.ImportReport report)
+    {
+        string Section(string title, IEnumerable<string> lines)
+        {
+            var list = lines.ToList();
+            return list.Count == 0 ? "" : $"{title}\n" + string.Join("\n", list.Select(l => "  • " + l)) + "\n\n";
+        }
+        var text = Section("ИМПОРТИРОВАНО", report.Imported) + Section("ПРЕДУПРЕЖДЕНИЯ", report.Warnings) + Section("ПРОПУЩЕНО", report.Skipped);
+        var window = new Window
+        {
+            Title = $"Импорт профиля EuroScope — {name}",
+            Owner = this,
+            Width = 720,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Style = (Style)FindResource("AtcWindow"),
+            Content = new TextBox
+            {
+                Text = text.TrimEnd(),
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = (FontFamily)FindResource("MonoFont"),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(14),
+            },
+        };
+        window.Show();
+    }
+
     private void OnOpenSectorClick(object sender, RoutedEventArgs e)
     {
         SaveProfile();
@@ -1327,6 +1504,8 @@ public partial class MainWindow : Window
         _plugins.ShutdownAll();
         _workspace.Dispose();
         _voice.Dispose();
+        // Off the UI thread: the ATIS logoffs must not wait for this (blocked) thread.
+        Task.Run(() => _atis.DisconnectAllAsync()).Wait(TimeSpan.FromSeconds(2));
         _session.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(2));
     }
 }

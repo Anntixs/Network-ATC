@@ -7,39 +7,63 @@
         WindowState="Maximized" Style="{StaticResource AtcWindow}">
   <Grid x:Name="Root">
     <Grid.RowDefinitions>
-      <RowDefinition Height="34"/>
+      <RowDefinition Height="30"/>
       <RowDefinition Height="*"/>
       <RowDefinition Height="34"/>
     </Grid.RowDefinitions>
 
-    <!-- Menu bar (EuroScope-style text menu, Aurora colors) -->
+    <!-- Top bar laid out like EuroScope: menu keys on the left, the controller's station, the METAR strip,
+         then view range and UTC on the right. -->
     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel Margin="10,0">
-        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-          <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}" Margin="0,0,7,0"/>
-          <TextBlock Text="Network-ATC" FontWeight="SemiBold" Margin="0,0,14,0"/>
-          <Button Content="СЕКТОР" Style="{StaticResource MenuButton}" Click="OnOpenSectorClick" ToolTip="Выбор сектора (Ctrl+O)"/>
-          <ToggleButton x:Name="LayersButton" Content="КАРТЫ" Style="{StaticResource MenuToggle}" Click="OnLayersClick" ToolTip="Слои карты (F6)"/>
-          <Button x:Name="ListsButton" Content="СПИСКИ ▾" Style="{StaticResource MenuButton}" Click="OnListsClick"/>
-          <Button Content="ВПП" Style="{StaticResource MenuButton}" Click="OnRunwaysClick" ToolTip="Активные аэродромы, ВПП и ATIS (Ctrl+R)"/>
-          <Button x:Name="VoiceButton" Style="{StaticResource MenuButton}" Click="OnVoiceClick" ToolTip="Голосовая связь: частоты, тангента, аудио">
+      <DockPanel Margin="6,0">
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+          <Border Width="22" Height="22" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="0,0,6,0" ToolTip="Network-ATC">
+            <TextBlock Text="N" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource BgBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <Button x:Name="FileButton" Content="ФАЙЛ ▾" Style="{StaticResource BarButton}" Click="OnFileClick"
+                  ToolTip="Сектор, импорт профиля EuroScope, недавние секторы"/>
+          <ToggleButton x:Name="LayersButton" Content="КАРТЫ" Style="{StaticResource BarToggle}" Click="OnLayersClick" ToolTip="Слои карты (F6)"/>
+          <Button x:Name="ListsButton" Content="СПИСКИ ▾" Style="{StaticResource BarButton}" Click="OnListsClick"/>
+          <Button Content="ВПП" Style="{StaticResource BarButton}" Click="OnRunwaysClick" ToolTip="Активные аэродромы, ВПП и ATIS (Ctrl+R)"/>
+          <Button x:Name="VoiceButton" Style="{StaticResource BarButton}" Click="OnVoiceClick" ToolTip="Голосовая связь: частоты, тангента, аудио">
             <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="VoiceDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,7,0"/>
+              <Ellipse x:Name="VoiceDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
               <TextBlock Text="РАДИО"/>
             </StackPanel>
           </Button>
-          <Button Content="НАСТРОЙКИ" Style="{StaticResource MenuButton}" Click="OnSettingsClick"/>
-          <Border Width="1" Margin="10,8" Background="{DynamicResource BorderBrush}"/>
-          <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource MenuButton}">
+          <Button x:Name="AtisButton" Style="{StaticResource BarButton}" Click="OnAtisClick" ToolTip="Станции ATIS: текст для пилотов и голос в эфире">
             <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="ConnectDot" Width="7" Height="7" Fill="{DynamicResource DangerBrush}" Margin="0,0,7,0"/>
+              <Ellipse x:Name="AtisDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+              <TextBlock x:Name="AtisLabel" Text="ATIS"/>
+            </StackPanel>
+          </Button>
+          <Button x:Name="PluginsButton" Content="ПЛАГИНЫ ▾" Style="{StaticResource BarButton}" Click="OnPluginsClick"
+                  ToolTip="Плагины Network-ATC и данные плагинов EuroScope"/>
+          <Button Content="НАСТРОЙКИ" Style="{StaticResource BarButton}" Click="OnSettingsClick"/>
+          <Border Width="1" Height="16" Margin="4,0,7,0" Background="{DynamicResource BorderBrush}"/>
+          <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource BarButton}">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse x:Name="ConnectDot" Width="7" Height="7" Fill="{DynamicResource DangerBrush}" Margin="0,0,6,0"/>
               <TextBlock x:Name="ConnectText" Text="ПОДКЛЮЧИТЬСЯ"/>
             </StackPanel>
           </Button>
-          <TextBlock x:Name="StationText" Text="" Style="{StaticResource Muted}" Margin="8,0,0,0" FontFamily="{StaticResource MonoFont}"/>
+          <!-- The controller's own station, as in the EuroScope top bar. -->
+          <Border x:Name="StationBox" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8,0" Height="22"
+                  Margin="4,0,0,0" Background="{DynamicResource BgBrush}" Visibility="Collapsed">
+            <TextBlock x:Name="StationText" Text="" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" VerticalAlignment="Center"
+                       Foreground="{DynamicResource AccentBrush}"/>
+          </Border>
         </StackPanel>
-        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-          <ItemsControl x:Name="WeatherStrip" VerticalAlignment="Center" Margin="0,0,10,0">
+        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+          <TextBlock x:Name="SectorText" Text="Нет сектора" Style="{StaticResource Muted}" Margin="10,0,12,0" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+          <TextBlock x:Name="RangeText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,12,0"/>
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8,0" Height="22" Background="{DynamicResource BgBrush}">
+            <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          </Border>
+        </StackPanel>
+        <!-- METAR strip of the active airports: ATIS letter, wind and QNH; the full METAR in the tooltip. -->
+        <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Margin="10,0,0,0" VerticalAlignment="Center">
+          <ItemsControl x:Name="WeatherStrip">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <StackPanel Orientation="Horizontal"/>
@@ -47,21 +71,18 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Background="{DynamicResource HoverBrush}" CornerRadius="3" Padding="7,2" Margin="0,0,6,0" ToolTip="{Binding Raw}">
-                  <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding Station}" FontWeight="SemiBold" Margin="0,0,6,0"/>
-                    <TextBlock Text="{Binding Atis}" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold" Margin="0,0,6,0"/>
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6,0" Height="22" Margin="0,0,4,0"
+                        Background="{DynamicResource BgBrush}" ToolTip="{Binding Raw}">
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Station}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" Margin="0,0,5,0"/>
+                    <TextBlock Text="{Binding Atis}" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold" FontFamily="{StaticResource MonoFont}" Margin="0,0,5,0"/>
                     <TextBlock Text="{Binding Summary}" FontFamily="{StaticResource MonoFont}" Style="{StaticResource Muted}"/>
                   </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-          <TextBlock x:Name="SectorText" Text="Нет сектора" Style="{StaticResource Muted}" Margin="0,0,16,0"/>
-          <TextBlock x:Name="RangeText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,16,0"/>
-          <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold"/>
-        </StackPanel>
-        <Border/>
+        </ScrollViewer>
       </DockPanel>
     </Border>
 
