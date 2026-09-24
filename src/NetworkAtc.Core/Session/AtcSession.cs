@@ -158,6 +158,7 @@ public sealed partial class AtcSession : IAsyncDisposable
 
     internal void OnPacket(object? sender, FsdPacket p)
     {
+        if (OnCoordinationPacket(p)) return;
         switch (p.Command)
         {
             case "@":
@@ -192,6 +193,7 @@ public sealed partial class AtcSession : IAsyncDisposable
                 break;
             case "#DA":
                 if (_controllers.TryRemove(p[0], out _)) ControllersChanged?.Invoke(this, EventArgs.Empty);
+                OnControllerGone(p[0]);
                 break;
             case "#TM":
                 OnText(p[0], p[1], string.Join(':', p.Fields.Skip(2)));
@@ -227,6 +229,8 @@ public sealed partial class AtcSession : IAsyncDisposable
         {
             if (!t.HasFlightPlan) _ = RequestFlightPlanAsync(r.Callsign);
             _ = _fsd?.SendAsync(AtcPackets.PlaneInfoRequest(Callsign, r.Callsign));
+            // Ask the other controllers who owns it; the owner answers with IT and its annotations.
+            if (t.Owner.Length == 0) _ = _fsd?.SendAsync(AtcPackets.Shared(Callsign, "WH", r.Callsign));
         }
         TrackUpdated?.Invoke(this, t);
     }
@@ -252,7 +256,11 @@ public sealed partial class AtcSession : IAsyncDisposable
                 TrackRemoved?.Invoke(this, t.Callsign);
         bool changed = false;
         foreach (var c in _controllers.Values)
-            if (now - c.LastSeen > TimeSpan.FromSeconds(90)) changed |= _controllers.TryRemove(c.Callsign, out _);
+            if (now - c.LastSeen > TimeSpan.FromSeconds(90) && _controllers.TryRemove(c.Callsign, out _))
+            {
+                changed = true;
+                OnControllerGone(c.Callsign);
+            }
         if (changed) ControllersChanged?.Invoke(this, EventArgs.Empty);
     }
 

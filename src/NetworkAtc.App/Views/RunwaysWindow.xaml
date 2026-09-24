@@ -1,0 +1,20 @@
+<Window x:Class="NetworkAtc.App.Views.RunwaysWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Активные аэродромы и ВПП" Width="520" Height="560" MinHeight="300"
+        WindowStartupLocation="CenterOwner" Style="{StaticResource AtcWindow}">
+  <DockPanel Margin="20,16,20,18">
+    <StackPanel DockPanel.Dock="Top">
+      <TextBlock Text="Аэродромы и ВПП" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,10"
+                 Text="Отмеченные аэродромы попадают в списки вылета и прилёта. По ВПП подбираются SID и STAR, у ВПП посадки рисуется продолжение оси."/>
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <Button Content="Отмена" IsCancel="True" Margin="0,0,8,0"/>
+      <Button Content="Применить" IsDefault="True" Style="{StaticResource Primary}" Click="OnOk"/>
+    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel x:Name="Body"/>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

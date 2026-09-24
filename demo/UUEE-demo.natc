@@ -1,0 +1,630 @@
+{
+  "format": "network-atc-sector",
+  "version": 1,
+  "info": {
+    "name": "Network-ATC demo (UUEE, формат Network-ATC)",
+    "defaultCallsign": "UUEE_DEL",
+    "defaultAirport": "UUEE",
+    "center": [
+      55.972778,
+      37.414722
+    ],
+    "magneticVariation": -11
+  },
+  "colors": {
+    "COLOR_Coast": "#909090",
+    "COLOR_Runway": "#C0C0C0",
+    "COLOR_SID": "#99CC66",
+    "COLOR_STAR": "#6699CC",
+    "COLOR_ARTCC": "#787878",
+    "COLOR_Apron": "#333333"
+  },
+  "vors": [
+    {
+      "name": "SHR",
+      "lat": 55.975,
+      "lon": 37.425,
+      "frequency": "114.600"
+    },
+    {
+      "name": "MR",
+      "lat": 55.583333,
+      "lon": 37.9,
+      "frequency": "116.000"
+    }
+  ],
+  "ndbs": [
+    {
+      "name": "NW",
+      "lat": 55.886111,
+      "lon": 37.211111,
+      "frequency": "335.000"
+    }
+  ],
+  "airports": [
+    {
+      "name": "UUEE",
+      "lat": 55.972778,
+      "lon": 37.414722,
+      "frequency": "131.500"
+    },
+    {
+      "name": "UUWW",
+      "lat": 55.596111,
+      "lon": 37.261111,
+      "frequency": "122.800"
+    },
+    {
+      "name": "UUDD",
+      "lat": 55.408611,
+      "lon": 37.906111,
+      "frequency": "122.800"
+    }
+  ],
+  "fixes": [
+    {
+      "name": "DEMO1",
+      "lat": 56.166667,
+      "lon": 37.166667
+    },
+    {
+      "name": "DEMO2",
+      "lat": 56.25,
+      "lon": 37.75
+    },
+    {
+      "name": "DEMO3",
+      "lat": 55.75,
+      "lon": 37.833333
+    },
+    {
+      "name": "DEMO4",
+      "lat": 55.833333,
+      "lon": 36.916667
+    },
+    {
+      "name": "DEMO5",
+      "lat": 56.416667,
+      "lon": 37.416667
+    }
+  ],
+  "runways": [
+    {
+      "airport": "UUEE",
+      "id1": "06L",
+      "id2": "24R",
+      "heading1": 62,
+      "heading2": 242,
+      "end1": [
+        55.968889,
+        37.386667
+      ],
+      "end2": [
+        55.9875,
+        37.456667
+      ]
+    },
+    {
+      "airport": "UUEE",
+      "id1": "06R",
+      "id2": "24L",
+      "heading1": 62,
+      "heading2": 242,
+      "end1": [
+        55.951944,
+        37.378333
+      ],
+      "end2": [
+        55.971111,
+        37.4475
+      ]
+    },
+    {
+      "airport": "UUEE",
+      "id1": "06C",
+      "id2": "24C",
+      "heading1": 62,
+      "heading2": 242,
+      "end1": [
+        55.977778,
+        37.341667
+      ],
+      "end2": [
+        55.994444,
+        37.402778
+      ]
+    }
+  ],
+  "maps": [
+    {
+      "name": "ARTCC",
+      "lines": [
+        {
+          "name": "DEMO CTR",
+          "color": "#787878",
+          "points": [
+            [
+              56.666667,
+              36.5
+            ],
+            [
+              56.666667,
+              38.5
+            ],
+            [
+              55.333333,
+              38.5
+            ],
+            [
+              55.333333,
+              36.5
+            ],
+            [
+              56.666667,
+              36.5
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SID",
+      "lines": [
+        {
+          "name": "DEMO1A",
+          "color": "#99CC66",
+          "points": [
+            [
+              55.975,
+              37.425
+            ],
+            [
+              56.416667,
+              37.416667
+            ]
+          ]
+        },
+        {
+          "name": "DEMO4A",
+          "color": "#99CC66",
+          "points": [
+            [
+              55.975,
+              37.425
+            ],
+            [
+              55.833333,
+              36.916667
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "STAR",
+      "lines": [
+        {
+          "name": "DEMO2A",
+          "color": "#6699CC",
+          "points": [
+            [
+              56.25,
+              37.75
+            ],
+            [
+              56.166667,
+              37.166667
+            ],
+            [
+              55.975,
+              37.425
+            ]
+          ]
+        },
+        {
+          "name": "DEMO3A",
+          "color": "#6699CC",
+          "points": [
+            [
+              55.75,
+              37.833333
+            ],
+            [
+              55.975,
+              37.425
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "HIGH AIRWAY",
+      "lines": [
+        {
+          "name": "DM100",
+          "points": [
+            [
+              55.833333,
+              36.916667
+            ],
+            [
+              56.166667,
+              37.166667
+            ],
+            [
+              56.25,
+              37.75
+            ]
+          ]
+        },
+        {
+          "name": "DM200",
+          "points": [
+            [
+              55.75,
+              37.833333
+            ],
+            [
+              56.25,
+              37.75
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "GEO",
+      "lines": [
+        {
+          "name": "UUEE apron",
+          "color": "#333333",
+          "points": [
+            [
+              55.963889,
+              37.4
+            ],
+            [
+              55.969444,
+              37.425
+            ],
+            [
+              55.965278,
+              37.436111
+            ]
+          ]
+        },
+        {
+          "name": "Moscow ring",
+          "color": "#909090",
+          "points": [
+            [
+              55.916667,
+              37.5
+            ],
+            [
+              55.833333,
+              37.7
+            ],
+            [
+              55.666667,
+              37.7
+            ],
+            [
+              55.583333,
+              37.5
+            ],
+            [
+              55.666667,
+              37.333333
+            ],
+            [
+              55.833333,
+              37.333333
+            ],
+            [
+              55.916667,
+              37.5
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Зона ожидания DEMO5",
+      "color": "#C08A3E",
+      "lines": [
+        {
+          "name": "HOLD DEMO5",
+          "points": [
+            [
+              56.416667,
+              37.416667
+            ],
+            [
+              56.46615,
+              37.497362
+            ],
+            [
+              56.439391,
+              37.551097
+            ],
+            [
+              56.389908,
+              37.470332
+            ],
+            [
+              56.416667,
+              37.416667
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "regions": [
+    {
+      "name": "UUEE terminal",
+      "color": "#333333",
+      "points": [
+        [
+          55.964444,
+          37.405556
+        ],
+        [
+          55.968056,
+          37.422222
+        ],
+        [
+          55.966111,
+          37.427778
+        ],
+        [
+          55.9625,
+          37.411111
+        ]
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "text": "SHEREMETYEVO",
+      "at": [
+        55.991667,
+        37.4
+      ],
+      "color": "#C0C0C0"
+    },
+    {
+      "text": "VNUKOVO",
+      "at": [
+        55.608333,
+        37.233333
+      ],
+      "color": "#C0C0C0"
+    }
+  ],
+  "freeTexts": [
+    {
+      "text": "TWR 131.5",
+      "at": [
+        55.983333,
+        37.366667
+      ],
+      "group": "UUEE"
+    }
+  ],
+  "positions": [
+    {
+      "callsign": "UUEE_DEL",
+      "radioName": "Sheremetyevo Delivery",
+      "frequency": "129.800",
+      "identifier": "ED",
+      "prefix": "UUEE",
+      "suffix": "DEL",
+      "squawks": [
+        4101,
+        4177
+      ]
+    },
+    {
+      "callsign": "UUEE_GND",
+      "radioName": "Sheremetyevo Ground",
+      "frequency": "121.700",
+      "identifier": "EG",
+      "prefix": "UUEE",
+      "suffix": "GND",
+      "squawks": [
+        4101,
+        4177
+      ]
+    },
+    {
+      "callsign": "UUEE_TWR",
+      "radioName": "Sheremetyevo Tower",
+      "frequency": "131.500",
+      "identifier": "ET",
+      "prefix": "UUEE",
+      "suffix": "TWR",
+      "squawks": [
+        4101,
+        4177
+      ]
+    },
+    {
+      "callsign": "UUEE_APP",
+      "radioName": "Sheremetyevo Approach",
+      "frequency": "128.000",
+      "identifier": "EA",
+      "prefix": "UUEE",
+      "suffix": "APP",
+      "squawks": [
+        4201,
+        4277
+      ]
+    },
+    {
+      "callsign": "DEMO_CTR",
+      "radioName": "Demo Control",
+      "frequency": "132.000",
+      "identifier": "DC",
+      "prefix": "DEMO",
+      "suffix": "CTR",
+      "squawks": [
+        4301,
+        4377
+      ]
+    }
+  ],
+  "sectorLines": {
+    "UUEE_TMA_N": [
+      [
+        56.333333,
+        36.833333
+      ],
+      [
+        56.333333,
+        38
+      ]
+    ],
+    "UUEE_TMA_S": [
+      [
+        55.666667,
+        38
+      ],
+      [
+        55.666667,
+        36.833333
+      ]
+    ],
+    "DEMO_N": [
+      [
+        57,
+        35.5
+      ],
+      [
+        57,
+        39.5
+      ]
+    ],
+    "DEMO_S": [
+      [
+        55,
+        39.5
+      ],
+      [
+        55,
+        35.5
+      ]
+    ]
+  },
+  "sectors": [
+    {
+      "name": "UUEE_TMA",
+      "floor": 0,
+      "ceiling": 9500,
+      "owners": [
+        "EA",
+        "DC"
+      ],
+      "borders": [
+        "UUEE_TMA_N",
+        "UUEE_TMA_S"
+      ]
+    },
+    {
+      "name": "DEMO_CTR",
+      "floor": 0,
+      "ceiling": 66000,
+      "owners": [
+        "DC"
+      ],
+      "borders": [
+        "DEMO_N",
+        "DEMO_S"
+      ]
+    }
+  ],
+  "procedures": [
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "24R",
+      "name": "DEMO1A",
+      "route": [
+        "SHR",
+        "DEMO5"
+      ]
+    },
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "24R",
+      "name": "DEMO4A",
+      "route": [
+        "SHR",
+        "DEMO4"
+      ]
+    },
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "06L",
+      "name": "DEMO1B",
+      "route": [
+        "SHR",
+        "DEMO5"
+      ]
+    },
+    {
+      "kind": "SID",
+      "airport": "UUEE",
+      "runway": "06L",
+      "name": "DEMO4B",
+      "route": [
+        "SHR",
+        "DEMO4"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "24L",
+      "name": "DEMO2A",
+      "route": [
+        "DEMO2",
+        "DEMO1",
+        "SHR"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "24L",
+      "name": "DEMO3A",
+      "route": [
+        "DEMO3",
+        "SHR"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "06R",
+      "name": "DEMO2B",
+      "route": [
+        "DEMO2",
+        "SHR"
+      ]
+    },
+    {
+      "kind": "STAR",
+      "airport": "UUEE",
+      "runway": "06R",
+      "name": "DEMO3B",
+      "route": [
+        "DEMO3",
+        "SHR"
+      ]
+    }
+  ]
+}

@@ -40,6 +40,16 @@ public sealed class RadarView : FrameworkElement
     private (string Callsign, string? Field, Point Start)? _pendingTagClick;
     private readonly Dictionary<string, Point> _targetPoints = new(StringComparer.OrdinalIgnoreCase);
     private Typeface _tagTypeface = new("Consolas");
+
+    /// <summary>End of a measuring line: a moving aircraft or a fixed point.</summary>
+    private sealed record Anchor(Track? Track, GeoPoint Point)
+    {
+        public GeoPoint Position => Track?.Position ?? Point;
+    }
+
+    private readonly List<(Anchor A, Anchor B)> _measures = [];
+    private Anchor? _measureStart;
+    private Point _rightDown;
     private readonly Dictionary<string, TagTemplate> _templates = [];
 
     public RadarView()
@@ -59,6 +69,10 @@ public sealed class RadarView : FrameworkElement
     public IReadOnlyList<Conflict> Conflicts { get; set; } = [];
     public Track? Selected { get; private set; }
     public Track? Hovered { get; private set; }
+    /// <summary>Tag states, warnings, routes and runways (EuroScope logic); optional.</summary>
+    public NetworkAtc.Core.Session.Workspace? Workspace { get; set; }
+    /// <summary>True while something on the scope blinks (an aircraft offered to us); the window keeps redrawing.</summary>
+    public bool NeedsAnimation { get; private set; }
 
     public event EventHandler<Track?>? SelectionChanged;
     public event EventHandler? ViewChanged;
@@ -133,8 +147,11 @@ public sealed class RadarView : FrameworkElement
         _tagTypeface = new Typeface(Profile.Tags.FontFamily.Split(',')[0].Trim());
         if (Profile.IsLayerVisible("RANGE RINGS")) DrawRangeRings(dc, theme);
         if (Sector != null) DrawSector(dc, Sector, theme);
+        if (Sector != null && Profile.IsLayerVisible("CENTERLINES")) DrawCenterlines(dc, Sector, theme);
         DrawOverlays(dc);
+        DrawRoutes(dc, theme);
         DrawTraffic(dc, theme);
+        DrawMeasures(dc, theme);
         DrawScaleBar(dc, theme);
     }
 
@@ -178,12 +195,15 @@ public sealed class RadarView : FrameworkElement
         foreach (var (layer, color, dashed) in layers)
         {
             if (!Profile.IsLayerVisible(layer) || !s.Lines.TryGetValue(layer, out var lines)) continue;
-            foreach (var l in lines)
-            {
-                Point a = ToScreen(l.From), b = ToScreen(l.To);
-                if (!OnScreen(a, 4000) && !OnScreen(b, 4000)) continue;
-                dc.DrawLine(Paint.Pen(MapColor(l.Color, color), 1, dashed), a, b);
-            }
+            string layerColor = s.LayerColors.TryGetValue(layer, out var lc) && Profile.UseSectorFileColors ? lc : color;
+            DrawLines(dc, lines, l => MapColor(l.Color, layerColor), dashed);
+        }
+        // Layers that only exist in Network-ATC sectors always use their own colors.
+        foreach (var layer in s.CustomLayers)
+        {
+            if (!Profile.IsLayerVisible(layer)) continue;
+            string layerColor = s.LayerColors.GetValueOrDefault(layer, theme.Geo);
+            DrawLines(dc, s.Lines[layer], l => l.Color ?? layerColor, false);
         }
 
         if (Profile.IsLayerVisible("SECTORLINES"))
@@ -256,6 +276,100 @@ public sealed class RadarView : FrameworkElement
             foreach (var l in s.FreeTexts) DrawSmallText(dc, l.Text, ToScreen(l.Position), theme.Label);
     }
 
+    private void DrawLines(DrawingContext dc, IEnumerable<SectorLine> lines, Func<SectorLine, string> color, bool dashed)
+    {
+        foreach (var l in lines)
+        {
+            Point a = ToScreen(l.From), b = ToScreen(l.To);
+            if (!OnScreen(a, 4000) && !OnScreen(b, 4000)) continue;
+            dc.DrawLine(Paint.Pen(color(l), 1, dashed), a, b);
+        }
+    }
+
+    /// <summary>Extended centerlines of the active arrival runways, 15 NM with a tick every 5 NM.</summary>
+    private void DrawCenterlines(DrawingContext dc, SectorFile s, Theme theme)
+    {
+        var pen = Paint.Pen(theme.Centerline, 1, dashed: true);
+        foreach (var (airport, use) in Profile.ActiveRunways)
+            foreach (var id in use.Arrival)
+            {
+                var rwy = s.Runways.FirstOrDefault(r => r.Airport.Equals(airport, StringComparison.OrdinalIgnoreCase) &&
+                    (r.Id1.Equals(id, StringComparison.OrdinalIgnoreCase) || r.Id2.Equals(id, StringComparison.OrdinalIgnoreCase)));
+                if (rwy == null) continue;
+                bool first = rwy.Id1.Equals(id, StringComparison.OrdinalIgnoreCase);
+                var threshold = first ? rwy.End1 : rwy.End2;
+                var other = first ? rwy.End2 : rwy.End1;
+                double outbound = GeoMath.BearingDeg(other, threshold);
+                var a = ToScreen(threshold);
+                dc.DrawLine(pen, a, ToScreen(GeoMath.Offset(threshold, outbound, 15)));
+                var tickPen = Paint.Pen(theme.Centerline, 1);
+                for (int nm = 5; nm <= 15; nm += 5)
+                {
+                    var c = GeoMath.Offset(threshold, outbound, nm);
+                    dc.DrawLine(tickPen, ToScreen(GeoMath.Offset(c, outbound + 90, 0.5)), ToScreen(GeoMath.Offset(c, outbound - 90, 0.5)));
+                }
+            }
+    }
+
+    /// <summary>Flight plan routes of aircraft with route display on, from the aircraft to the destination.</summary>
+    private void DrawRoutes(DrawingContext dc, Theme theme)
+    {
+        if (Workspace == null) return;
+        var pen = Paint.Pen(theme.RouteLine, 1.2, dashed: true);
+        foreach (var t in Tracks().Where(t => t.ShowRoute && t.LastUpdate != default))
+        {
+            var points = Workspace.Procedures.ResolveRoute(t);
+            if (points.Count == 0) continue;
+            // Skip the points already behind the aircraft.
+            int start = 0;
+            double best = double.MaxValue;
+            for (int i = 0; i < points.Count; i++)
+            {
+                double d = GeoMath.DistanceNm(t.Position, points[i].Position);
+                if (d < best) (best, start) = (d, i);
+            }
+            if (start + 1 < points.Count &&
+                GeoMath.DistanceNm(t.Position, points[start + 1].Position) < GeoMath.DistanceNm(points[start].Position, points[start + 1].Position))
+                start++;
+            var prev = ToScreen(t.Position);
+            for (int i = start; i < points.Count; i++)
+            {
+                var p = ToScreen(points[i].Position);
+                dc.DrawLine(pen, prev, p);
+                dc.DrawEllipse(null, Paint.Pen(theme.RouteLine, 1), p, 2.5, 2.5);
+                DrawSmallText(dc, points[i].Name, new Point(p.X + 5, p.Y + 2), theme.RouteLine);
+                prev = p;
+            }
+        }
+    }
+
+    /// <summary>Distance/bearing lines; between two aircraft also the closest point of approach.</summary>
+    private void DrawMeasures(DrawingContext dc, Theme theme)
+    {
+        var all = _measures.ToList();
+        if (_measureStart != null) all.Add((_measureStart, new Anchor(HitTarget(_mouse), ToGeo(_mouse))));
+        foreach (var (a, b) in all)
+        {
+            Point pa = ToScreen(a.Position), pb = ToScreen(b.Position);
+            dc.DrawLine(Paint.Pen(theme.Measure, 1), pa, pb);
+            double nm = GeoMath.DistanceNm(a.Position, b.Position);
+            string text = $"{nm:0.0} NM  {GeoMath.BearingDeg(a.Position, b.Position):000}°";
+            if (a.Track is { } ta && b.Track is { } tb && !ReferenceEquals(ta, tb))
+            {
+                var (min, minutes) = NetworkAtc.Core.Session.CommandProcessor.ClosestApproach(ta, tb, 20);
+                if (minutes > 0.1) text += $"\nмин {min:0.0} NM · {minutes:0} мин";
+            }
+            DrawSmallText(dc, text, new Point((pa.X + pb.X) / 2 + 6, (pa.Y + pb.Y) / 2 - 6), theme.Measure, 11);
+        }
+    }
+
+    /// <summary>Removes all measuring lines.</summary>
+    public void ClearTools()
+    {
+        _measures.Clear();
+        InvalidateVisual();
+    }
+
     private void DrawOverlays(DrawingContext dc)
     {
         if (Plugins == null) return;
@@ -282,6 +396,7 @@ public sealed class RadarView : FrameworkElement
         var conflicted = new HashSet<string>(Conflicts.SelectMany(c => new[] { c.A.Callsign, c.B.Callsign }), StringComparer.OrdinalIgnoreCase);
         var tracks = Tracks().Where(t => t.LastUpdate != default && PassesFilter(t)).ToList();
         double dip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        NeedsAnimation = false;
 
         // STCA lines under everything else.
         foreach (var c in Conflicts)
@@ -341,15 +456,26 @@ public sealed class RadarView : FrameworkElement
                 dc.DrawGeometry(null, Paint.Pen(symbolColor, 1.3), d);
             }
             if (t.Ident) dc.DrawEllipse(null, Paint.Pen(symbolColor, 1), p, s + 5, s + 5);
+            if (t.HaloNm is { } halo)
+            {
+                double r = halo / _nmPerPixel;
+                dc.DrawEllipse(null, Paint.Pen(theme.Halo, 1, dashed: true), p, r, r);
+                DrawSmallText(dc, $"{halo:0.#}", new Point(p.X + r * 0.7 + 2, p.Y - r * 0.7 - 12), theme.Halo, 9.5);
+            }
             if (selected) dc.DrawEllipse(null, Paint.Pen(theme.TagSelected, 1), p, s + 8, s + 8);
 
             DrawTag(dc, t, p, theme, selected || hovered, emergency || conflicted.Contains(t.Callsign), dip);
         }
     }
 
+    private TrackState StateOf(Track t) =>
+        Workspace?.StateOf(t) ?? (t.IsTracked ? TrackState.Assumed : TrackState.NotConcerned);
+
     private void DrawTag(DrawingContext dc, Track t, Point target, Theme theme, bool detailed, bool alert, double dip)
     {
-        string layout = detailed ? Profile.Tags.Detailed : t.IsTracked ? Profile.Tags.Tracked : Profile.Tags.Untracked;
+        var state = StateOf(t);
+        bool correlated = state is TrackState.Assumed or TrackState.TransferFromMe or TrackState.TransferToMe;
+        string layout = detailed ? Profile.Tags.Detailed : correlated ? Profile.Tags.Tracked : Profile.Tags.Untracked;
         if (!_templates.TryGetValue(layout, out var template))
         {
             if (_templates.Count > 20) _templates.Clear();
@@ -357,15 +483,31 @@ public sealed class RadarView : FrameworkElement
         }
         var lines = template.RenderSpans(t, TagFields);
         if (lines.Count == 0) return;
+        bool blinkOff = false;
+        if (state == TrackState.TransferToMe)
+        {
+            NeedsAnimation = true;
+            blinkOff = DateTime.UtcNow.Millisecond >= 500;
+        }
         string color = alert ? theme.Conflict
             : ReferenceEquals(t, Selected) ? theme.TagSelected
-            : t.Highlight ?? (t.IsTracked ? theme.TagTextTracked : theme.TagText);
+            : t.Highlight ?? state switch
+            {
+                TrackState.Assumed => theme.TagTextTracked,
+                TrackState.TransferToMe => blinkOff ? theme.TagText : theme.TagTransferToMe,
+                TrackState.TransferFromMe => theme.TagTransferFromMe,
+                TrackState.Redundant => theme.TagRedundant,
+                TrackState.Concerned => theme.TagConcerned,
+                _ => theme.TagText,
+            };
         var brush = Paint.Brush(color);
+        var warningBrush = Paint.Brush(theme.Warning);
         double size = Profile.Tags.FontSize, lineHeight = size * 1.3;
 
         // Measure every span so each field gets its own clickable rectangle.
         var measured = lines.Select(line => line.Select(span => (Span: span,
-            Text: new FormattedText(span.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size, brush, dip))).ToList()).ToList();
+            Text: new FormattedText(span.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size,
+                span.Field == "warn" ? warningBrush : brush, dip))).ToList()).ToList();
         double width = measured.Max(line => line.Sum(x => x.Text.WidthIncludingTrailingWhitespace));
         double height = lineHeight * measured.Count;
 
@@ -508,6 +650,12 @@ public sealed class RadarView : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         _mouse = e.GetPosition(this);
+        if (_measureStart != null)
+        {
+            InvalidateVisual();
+            ViewChanged?.Invoke(this, EventArgs.Empty);
+            return;
+        }
         if (_pendingTagClick is { } pending && (_mouse - pending.Start).Length > 3)
         {
             _draggingTag = pending.Callsign;
@@ -552,9 +700,36 @@ public sealed class RadarView : FrameworkElement
         ReleaseMouseCapture();
     }
 
+    protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
+    {
+        var p = e.GetPosition(this);
+        _rightDown = p;
+        if (HitTag(p) == null)
+        {
+            // Right-drag measures distance and bearing; from a target the line follows the aircraft.
+            _measureStart = new Anchor(HitTarget(p), ToGeo(p));
+            CaptureMouse();
+        }
+        base.OnMouseRightButtonDown(e);
+    }
+
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         var p = e.GetPosition(this);
+        if (_measureStart is { } start)
+        {
+            _measureStart = null;
+            ReleaseMouseCapture();
+            if ((p - _rightDown).Length > 6)
+            {
+                _measures.Add((start, new Anchor(HitTarget(p), ToGeo(p))));
+                if (_measures.Count > 8) _measures.RemoveAt(0);
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+            InvalidateVisual();
+        }
         if (HitTag(p) is { } tag && FindTrack(tag) is { } tagged)
         {
             TagClicked?.Invoke(this, new TagClickEventArgs(tagged, HitField(p)?.Field, true, p));

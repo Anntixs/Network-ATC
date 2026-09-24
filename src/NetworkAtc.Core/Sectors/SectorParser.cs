@@ -318,7 +318,13 @@ public static partial class SectorParser
             switch (section)
             {
                 case "POSITIONS" when f.Length >= 7:
-                    sector.Positions.Add(new AtcPosition(f[0], f[1], f[2], f[3], f[5], f[6]));
+                    sector.Positions.Add(new AtcPosition(f[0], f[1], f[2], f[3], f[5], f[6],
+                        f.Length > 10 ? ParseSquawk(f[9]) : null, f.Length > 10 ? ParseSquawk(f[10]) : null));
+                    break;
+                case "SIDSSTARS" when f.Length >= 5 && f[0].ToUpperInvariant() is "SID" or "STAR":
+                    sector.Procedures.Add(new Procedure(f[0].Equals("SID", StringComparison.OrdinalIgnoreCase) ? ProcedureKind.Sid : ProcedureKind.Star,
+                        f[1].Trim().ToUpperInvariant(), f[2].Trim().ToUpperInvariant(), f[3].Trim().ToUpperInvariant(),
+                        f[4].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(x => x.ToUpperInvariant()).ToList()));
                     break;
                 case "FREETEXT" when f.Length >= 4:
                     if (TryParseCoordinate(f[0], out var lat) && TryParseCoordinate(f[1], out var lon))
@@ -353,6 +359,14 @@ public static partial class SectorParser
             }
         }
         airspace?.Build(sector);
+    }
+
+    /// <summary>"4201" → 4201; "0000", "-" or anything that is not an octal code → null.</summary>
+    private static int? ParseSquawk(string text)
+    {
+        text = text.Trim();
+        return text.Length == 4 && text.All(c => c is >= '0' and <= '7') && text != "0000"
+            ? int.Parse(text, CultureInfo.InvariantCulture) : null;
     }
 
     private sealed class AirspaceBuilder(string name, int floor, int ceiling)

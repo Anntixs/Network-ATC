@@ -8,11 +8,24 @@ namespace NetworkAtc.Core.Customization;
 public sealed class TagLayouts
 {
     /// <summary>Aircraft nobody works.</summary>
-    public string Untracked { get; set; } = "{callsign}\n{fl}{vs}";
+    public string Untracked { get; set; } = DefaultUntracked;
     /// <summary>Aircraft the controller works.</summary>
-    public string Tracked { get; set; } = "{callsign} {wtc}\n{fl}{vs} {cfl|---}\n{gs10} {dest} {ahdg} {aspd}";
+    public string Tracked { get; set; } = DefaultTracked;
     /// <summary>Selected or hovered aircraft.</summary>
-    public string Detailed { get; set; } = "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{scratch|+ заметка}";
+    public string Detailed { get; set; } = DefaultDetailed;
+
+    public const string DefaultUntracked = "{warn}\n{callsign} {ho}\n{fl}{vs} {gs10}";
+    public const string DefaultTracked = "{warn}\n{callsign} {comm}{wtc}\n{fl}{vs} {cfl|---} {ho}\n{gs10} {dest} {ahdg} {aspd}";
+    public const string DefaultDetailed =
+        "{warn}\n{callsign} {type}/{wtc} {squawk} {asq}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{proc|SID/STAR} {rwy} {owner|—} {next}\n{scratch|+ заметка}";
+
+    /// <summary>The layouts before EuroScope coordination fields existed (profile version 2).</summary>
+    public static readonly string[] OldDefaults =
+    [
+        "{callsign}\n{fl}{vs}",
+        "{callsign} {wtc}\n{fl}{vs} {cfl|---}\n{gs10} {dest} {ahdg} {aspd}",
+        "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{scratch|+ заметка}",
+    ];
     public double FontSize { get; set; } = 11;
     public string FontFamily { get; set; } = "Cascadia Mono, Consolas";
     public bool ShowTagLeader { get; set; } = true;
@@ -41,6 +54,21 @@ public sealed class StationSettings
     public int Rating { get; set; } = 2;
 }
 
+/// <summary>Which events play a sound.</summary>
+public sealed class SoundSettings
+{
+    public bool Enabled { get; set; } = true;
+    public bool RadioMessage { get; set; } = true;
+    public bool PrivateMessage { get; set; } = true;
+    public bool HandoffRequest { get; set; } = true;
+    public bool HandoffAccepted { get; set; } = true;
+    public bool HandoffRefused { get; set; } = true;
+    public bool PointOut { get; set; } = true;
+    public bool ConflictAlert { get; set; } = true;
+    public bool Connection { get; set; } = true;
+    public double Volume { get; set; } = 0.6;
+}
+
 public sealed class ConnectionSettings
 {
     public string Host { get; set; } = "127.0.0.1";
@@ -50,14 +78,30 @@ public sealed class ConnectionSettings
     public string RealName { get; set; } = "";
 }
 
+/// <summary>Position, size and visibility of a floating list window.</summary>
+public sealed class WindowLayout
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; } = 320;
+    public double Height { get; set; } = 220;
+    public bool Visible { get; set; }
+
+    public WindowLayout() { }
+    public WindowLayout(double x, double y, double width, double height, bool visible) =>
+        (X, Y, Width, Height, Visible) = (x, y, width, height, visible);
+}
+
+public sealed class RecentSector
+{
+    public string Path { get; set; } = "";
+    public string Name { get; set; } = "";
+    public DateTime LastUsed { get; set; }
+}
+
 public sealed class PanelSettings
 {
-    public bool ShowAircraftList { get; set; } = true;
-    public bool ShowMessages { get; set; } = true;
-    public bool ShowControllers { get; set; } = true;
     public bool ShowFlightPlan { get; set; } = true;
-    public double SidePanelWidth { get; set; } = 300;
-    public double MessagesHeight { get; set; } = 170;
     public double UiScale { get; set; } = 1.0;
     public double UiFontSize { get; set; } = 12.5;
 }
@@ -68,6 +112,10 @@ public sealed class PanelSettings
 /// </summary>
 public sealed class Profile
 {
+    /// <summary>Profile format version, used to migrate old profiles.</summary>
+    public const int CurrentVersion = 3;
+    public int Version { get; set; }
+
     public string Name { get; set; } = "Default";
     public Theme Theme { get; set; } = new();
     /// <summary>Use the colors defined in the sector file instead of the theme's map colors.</summary>
@@ -82,6 +130,47 @@ public sealed class Profile
         ["RUNWAYS"] = true, ["AIRPORTS"] = true, ["FIXES"] = false, ["FIX NAMES"] = false, ["VOR"] = true, ["NDB"] = true,
         ["FREETEXT"] = false, ["SECTORLINES"] = true, ["RANGE RINGS"] = true,
     };
+
+    /// <summary>Airports the controller works: departure and arrival lists are built for them.</summary>
+    public List<string> ActiveAirports { get; set; } = [];
+
+    /// <summary>Active runways per airport (EuroScope "Active airport/runway" dialog).</summary>
+    public Dictionary<string, Sectors.RunwayUse> ActiveRunways { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Current ATIS letter per airport.</summary>
+    public Dictionary<string, string> AtisLetters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Controller info (ATIS) lines sent to pilots on request; aliases variables like $atiscode(UUEE) are expanded.</summary>
+    public List<string> ControllerInfo { get; set; } = ["$mycallsign $myfreq", "Информация $atiscode($myairport)"];
+    public SoundSettings Sounds { get; set; } = new();
+    /// <summary>Load METARs for the active airports from aviationweather.gov.</summary>
+    public bool FetchMetar { get; set; } = true;
+    /// <summary>Cleared level adherence: warn when the aircraft deviates from its CFL by more than this, feet.</summary>
+    public int ClamFeet { get; set; } = 300;
+
+    /// <summary>Floating list windows by id (see <see cref="DefaultWindows"/>).</summary>
+    public Dictionary<string, WindowLayout> Windows { get; set; } = DefaultWindows();
+
+    public List<RecentSector> RecentSectors { get; set; } = [];
+    public bool ShowSectorSelection { get; set; } = true;
+
+    public static Dictionary<string, WindowLayout> DefaultWindows() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["departures"] = new(16, 16, 470, 190, true),
+        ["arrivals"] = new(16, 220, 470, 190, true),
+        ["traffic"] = new(16, 424, 300, 220, false),
+        ["flightplan"] = new(-340, 16, 320, 420, true),   // negative X: from the right edge
+        ["atc"] = new(-340, 450, 320, 180, false),
+        ["conflicts"] = new(400, 16, 300, 140, false),
+        ["messages"] = new(-560, -230, 540, 210, true),   // negative Y: from the bottom edge
+        ["sil"] = new(500, 16, 330, 160, false),
+        ["sel"] = new(500, 190, 330, 160, false),
+    };
+
+    public void RememberSector(string path, string name)
+    {
+        RecentSectors.RemoveAll(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase));
+        RecentSectors.Insert(0, new RecentSector { Path = path, Name = name, LastUsed = DateTime.UtcNow });
+        if (RecentSectors.Count > 10) RecentSectors.RemoveRange(10, RecentSectors.Count - 10);
+    }
 
     public TagLayouts Tags { get; set; } = new();
     public TargetSettings Targets { get; set; } = new();
@@ -126,6 +215,14 @@ public sealed class Profile
         ["dep"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
         ["dest"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
         ["rfl"] = new(TagActions.FlightPlan, TagActions.AircraftMenu),
+        ["owner"] = new(TagActions.Handoff, TagActions.Handoff),
+        ["ho"] = new(TagActions.Handoff, TagActions.Handoff),
+        ["next"] = new(TagActions.Handoff, TagActions.Handoff),
+        ["proc"] = new(TagActions.Procedure, TagActions.Procedure),
+        ["sid"] = new(TagActions.Procedure, TagActions.Procedure),
+        ["star"] = new(TagActions.Procedure, TagActions.Procedure),
+        ["rwy"] = new(TagActions.Runway, TagActions.Runway),
+        ["clr"] = new(TagActions.Clearance, TagActions.Clearance),
     };
 
     /// <summary>
@@ -161,6 +258,18 @@ public sealed class Profile
         ["Connect"] = "Ctrl+K",
         ["TrackSelected"] = "F8",
         ["ClearSelection"] = "Escape",
+        ["ToggleDepartures"] = "F5",
+        ["ToggleArrivals"] = "F7",
+        ["ToggleConflicts"] = "F9",
+        ["ToggleAtc"] = "F11",
+        ["OpenSector"] = "Ctrl+O",
+        ["AssumeOrAccept"] = "F12",
+        ["HandoffNext"] = "Ctrl+H",
+        ["ReleaseOrRefuse"] = "Ctrl+D",
+        ["ToggleRoute"] = "Ctrl+T",
+        ["ActiveRunways"] = "Ctrl+R",
+        ["ToggleSil"] = "Ctrl+I",
+        ["ToggleSel"] = "Ctrl+E",
     };
 
     private static readonly JsonSerializerOptions Json = new()
@@ -182,11 +291,33 @@ public sealed class Profile
         {
             if (File.Exists(path))
             {
-                var p = JsonSerializer.Deserialize<Profile>(File.ReadAllText(path), Json) ?? new Profile();
+                var p = JsonSerializer.Deserialize<Profile>(File.ReadAllText(path), Json) ?? new Profile { Version = CurrentVersion };
                 // Keep new default key bindings / layers that older profile files don't have.
                 foreach (var (k, v) in DefaultKeyBindings) p.KeyBindings.TryAdd(k, v);
                 foreach (var (k, v) in new Profile().Layers) p.Layers.TryAdd(k, v);
                 p.TagClicks = new Dictionary<string, TagClickBinding>(p.TagClicks ?? [], StringComparer.OrdinalIgnoreCase);
+                p.Windows = new Dictionary<string, WindowLayout>(p.Windows ?? [], StringComparer.OrdinalIgnoreCase);
+                foreach (var (k, v) in DefaultWindows()) p.Windows.TryAdd(k, v);
+                p.ActiveAirports ??= [];
+                p.RecentSectors ??= [];
+                if (p.Version < 2)
+                {
+                    // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).
+                    p.Theme = new Theme();
+                }
+                if (p.Version < 3)
+                {
+                    // Version 3: tags gained coordination fields; only untouched default layouts are replaced.
+                    p.Tags ??= new TagLayouts();
+                    if (p.Tags.Untracked == TagLayouts.OldDefaults[0]) p.Tags.Untracked = TagLayouts.DefaultUntracked;
+                    if (p.Tags.Tracked == TagLayouts.OldDefaults[1]) p.Tags.Tracked = TagLayouts.DefaultTracked;
+                    if (p.Tags.Detailed == TagLayouts.OldDefaults[2]) p.Tags.Detailed = TagLayouts.DefaultDetailed;
+                }
+                p.Version = CurrentVersion;
+                p.ActiveRunways = new Dictionary<string, Sectors.RunwayUse>(p.ActiveRunways ?? [], StringComparer.OrdinalIgnoreCase);
+                p.AtisLetters = new Dictionary<string, string>(p.AtisLetters ?? [], StringComparer.OrdinalIgnoreCase);
+                p.ControllerInfo ??= [];
+                p.Sounds ??= new SoundSettings();
                 foreach (var (k, v) in DefaultTagClicks()) p.TagClicks.TryAdd(k, v);
                 return p;
             }
@@ -195,11 +326,12 @@ public sealed class Profile
         {
             // Corrupt profile: start from defaults.
         }
-        return new Profile();
+        return new Profile { Version = CurrentVersion };
     }
 
     public void Save(string path)
     {
+        Version = CurrentVersion;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(this, Json));
     }

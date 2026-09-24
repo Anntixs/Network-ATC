@@ -1,20 +1,27 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using NetworkAtc.Core.Customization;
 using NetworkAtc.Core.Fsd;
+using NetworkAtc.Core.Geo;
 using NetworkAtc.Core.Plugins;
 using NetworkAtc.Core.Radar;
+using NetworkAtc.Core.Sectors;
 using NetworkAtc.Plugins;
 
 namespace NetworkAtc.Core.Session;
 
 /// <summary>
-/// The command line. Plain text goes out on the primary frequency; dot-commands act on the
-/// selected aircraft or the station. Plugin commands and profile aliases are resolved here too.
+/// The command line, EuroScope style. Plain text goes out on the primary frequency; dot-commands act on
+/// the selected aircraft (ASEL) or the station. Plugin commands, profile aliases and alias variables
+/// ($aircraft, $metar(UUEE)...) are resolved here too.
 /// </summary>
-public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, PluginRegistry plugins, Func<Track?> selected)
+public sealed partial class CommandProcessor(AtcSession session, Func<Profile> profile, PluginRegistry plugins, Func<Track?> selected)
 {
     private DemoTraffic? _demo;
+
+    /// <summary>Sector, ownership, procedures and weather; optional (commands that need it say so).</summary>
+    public Workspace? Workspace { get; set; }
 
     /// <summary>Center used by ".demo"; set by the UI to the sector center.</summary>
     public GeoPoint DemoCenter { get; set; } = new(55.97, 37.41);
@@ -23,7 +30,7 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
     public event EventHandler<GeoPoint>? CenterRequested;
     /// <summary>The UI should show this aircraft (select it and open its flight plan).</summary>
     public event EventHandler<Track>? SelectRequested;
-    /// <summary>Annotations changed; the radar should redraw.</summary>
+    /// <summary>Annotations or settings changed; the radar should redraw.</summary>
     public event EventHandler? Changed;
 
     public static readonly IReadOnlyList<(string Command, string Help)> BuiltIn =
@@ -31,14 +38,33 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
         (".cfl 350 | A045", "разрешённый эшелон/высота выбранного борта"),
         (".hdg 270", "назначенный курс (.hdg — снять)"),
         (".spd 250", "назначенная скорость (.spd — снять)"),
-        (".sq [4521]", "назначить код ответчика (без кода — свободный из диапазона)"),
+        (".sq [4521]", "назначить код ответчика (без кода — свободный из диапазона позиции)"),
         (".scratch текст", "заметка к борту"),
-        (".track / .drop", "взять борт на сопровождение / отпустить"),
+        (".assume / .track", "взять борт на сопровождение (или принять передачу)"),
+        (".release / .drop", "отпустить борт"),
+        (".ho [ПОЗИЦИЯ]", "передать борт (без позиции — следующему диспетчеру по сектору)"),
+        (".accept / .refuse", "принять / отклонить передачу борта"),
+        (".hc", "отменить свою передачу"),
+        (".po ПОЗИЦИЯ", "показать борт другому диспетчеру (point-out)"),
+        (".sid [ИМЯ] / .star [ИМЯ]", "назначить SID / STAR (без имени — автоматически)"),
+        (".drwy 24R / .arwy 24L", "ВПП вылета / посадки выбранного борта"),
+        (".rwy UUEE 24R [24L]", "активные ВПП аэродрома: вылет [посадка]"),
+        (".clr", "флаг «разрешение получено» у выбранного борта"),
+        (".state PUSH|TAXI|DEPA", "наземный статус борта (без значения — снять)"),
+        (".route", "показать / скрыть маршрут выбранного борта"),
+        (".halo [3]", "кольцо радиусом N NM вокруг борта (0 — убрать)"),
+        (".sep AFL1 SBI2", "расстояние, пеленг и минимальное сближение двух бортов"),
         (".find AFL123", "найти борт и выделить его"),
         (".fp [AFL123]", "запросить план полёта с сервера"),
         (".msg ПОЗЫВНОЙ текст", "личное сообщение"),
+        (".contactme", "попросить выбранный борт выйти на вашу частоту"),
+        (".wallop текст", "запрос супервизору"),
+        (".atis UUEE [B|+]", "буква ATIS аэродрома (+ — следующая)"),
+        (".metar [UUEE]", "METAR аэродрома"),
+        (".info", "текст информации о диспетчере (отдаётся пилотам по запросу)"),
         (".freq 118.100", "основная частота"),
         (".range 150", "дальность видимости, NM"),
+        (".airport UUEE UUDD", "активные аэродромы для списков вылетов и прилётов (без кодов — показать)"),
         (".plugins", "список плагинов и их команд"),
         (".demo", "демо-трафик без сервера (повторно — выключить)"),
         (".help", "эта справка"),
@@ -63,32 +89,44 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
         switch (cmd)
         {
             case "cfl":
-                return WithSelected(t =>
+                return await WithSelected(async t =>
                 {
-                    if (args.Count == 0) { t.ClearedAltitude = null; return $"{t.Callsign}: CFL снят"; }
+                    if (args.Count == 0)
+                    {
+                        await session.AnnotateAsync(t, Annotation.ClearedAltitude, "").ConfigureAwait(false);
+                        return $"{t.Callsign}: CFL снят";
+                    }
                     if (!TryParseAltitude(args[0], out var feet)) return "Пример: .cfl 350 или .cfl A045";
-                    t.ClearedAltitude = feet;
+                    await session.AnnotateAsync(t, Annotation.ClearedAltitude, Inv(feet)).ConfigureAwait(false);
                     return $"{t.Callsign}: CFL {FormatAltitude(feet)}";
                 });
             case "hdg":
-                return WithSelected(t =>
+                return await WithSelected(async t =>
                 {
-                    if (args.Count == 0) { t.AssignedHeading = null; return $"{t.Callsign}: курс снят"; }
+                    if (args.Count == 0)
+                    {
+                        await session.AnnotateAsync(t, Annotation.Heading, "").ConfigureAwait(false);
+                        return $"{t.Callsign}: курс снят";
+                    }
                     if (!int.TryParse(args[0], out var h) || h is < 1 or > 360) return "Курс 1–360";
-                    t.AssignedHeading = h;
+                    await session.AnnotateAsync(t, Annotation.Heading, Inv(h)).ConfigureAwait(false);
                     return $"{t.Callsign}: курс {h:000}";
                 });
             case "spd":
-                return WithSelected(t =>
+                return await WithSelected(async t =>
                 {
-                    if (args.Count == 0) { t.AssignedSpeed = null; return $"{t.Callsign}: скорость снята"; }
+                    if (args.Count == 0)
+                    {
+                        await session.AnnotateAsync(t, Annotation.Speed, "").ConfigureAwait(false);
+                        return $"{t.Callsign}: скорость снята";
+                    }
                     if (!int.TryParse(args[0], out var s) || s is < 60 or > 999) return "Скорость 60–999";
-                    t.AssignedSpeed = s;
+                    await session.AnnotateAsync(t, Annotation.Speed, Inv(s)).ConfigureAwait(false);
                     return $"{t.Callsign}: скорость {s}";
                 });
             case "sq":
             case "squawk":
-                return WithSelected(t =>
+                return await WithSelected(async t =>
                 {
                     int code;
                     if (args.Count > 0)
@@ -97,20 +135,109 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
                         code = int.Parse(args[0], CultureInfo.InvariantCulture);
                     }
                     else if (FreeSquawk() is { } free) code = free;
-                    else return $"Нет свободных кодов в диапазоне {profile().SquawkRange}";
-                    t.AssignedSquawk = code;
+                    else return $"Нет свободных кодов в диапазоне {SquawkRangeText()}";
+                    await session.AnnotateAsync(t, Annotation.Squawk, code.ToString("0000", CultureInfo.InvariantCulture)).ConfigureAwait(false);
                     return $"{t.Callsign}: код {code:0000}";
                 });
             case "scratch":
-                return WithSelected(t =>
+                return await WithSelected(async t =>
                 {
-                    t.Scratchpad = rest;
+                    await session.AnnotateAsync(t, Annotation.Scratchpad, rest).ConfigureAwait(false);
                     return rest.Length == 0 ? $"{t.Callsign}: заметка удалена" : null;
                 });
             case "track":
-                return WithSelected(t => { t.IsTracked = true; return $"{t.Callsign}: на сопровождении"; });
+            case "assume":
+                return await WithSelected(async t =>
+                    await session.AssumeAsync(t).ConfigureAwait(false) ?? $"{t.Callsign}: на сопровождении");
             case "drop":
-                return WithSelected(t => { t.IsTracked = false; return $"{t.Callsign}: отпущен"; });
+            case "release":
+                return await WithSelected(async t =>
+                    await session.ReleaseAsync(t).ConfigureAwait(false) ?? $"{t.Callsign}: отпущен");
+            case "ho":
+            case "handoff":
+                return await WithSelected(async t =>
+                {
+                    string? target = args.Count > 0 ? ResolveController(args[0]) : Workspace?.NextController(t);
+                    if (target == null)
+                        return args.Count > 0 ? $"Диспетчер {args[0].ToUpperInvariant()} не найден" : "Следующий диспетчер не определён. Пример: .ho UUEE_APP";
+                    return await session.HandoffAsync(t, target).ConfigureAwait(false) ?? $"{t.Callsign}: передача {target}";
+                });
+            case "accept":
+            case "ha":
+                return await WithSelected(async t =>
+                    await session.AcceptHandoffAsync(t).ConfigureAwait(false) ?? $"{t.Callsign}: принят");
+            case "refuse":
+            case "hr":
+                return await WithSelected(async t =>
+                    await session.RefuseHandoffAsync(t).ConfigureAwait(false) ?? $"{t.Callsign}: передача отклонена");
+            case "hc":
+                return await WithSelected(async t =>
+                    await session.CancelHandoffAsync(t).ConfigureAwait(false) ?? $"{t.Callsign}: передача отменена");
+            case "po":
+            case "pointout":
+                return await WithSelected(async t =>
+                {
+                    if (args.Count == 0) return "Пример: .po UUWV_CTR";
+                    string target = ResolveController(args[0]) ?? args[0].ToUpperInvariant();
+                    return await session.PointOutAsync(t, target).ConfigureAwait(false) ?? $"{t.Callsign} показан {target}";
+                });
+            case "sid":
+            case "star":
+                return await WithSelected(async t =>
+                {
+                    var kind = cmd == "sid" ? Annotation.Sid : Annotation.Star;
+                    var procKind = cmd == "sid" ? ProcedureKind.Sid : ProcedureKind.Star;
+                    string name = args.Count > 0 ? args[0].ToUpperInvariant() : "";
+                    if (name.Length > 0 && Workspace?.Sector is { Procedures.Count: > 0 } s &&
+                        !s.Procedures.Any(p => p.Name == name && p.Kind == procKind))
+                        return $"{cmd.ToUpperInvariant()} {name} нет в секторе";
+                    await session.AnnotateAsync(t, kind, name).ConfigureAwait(false);
+                    string? effective = cmd == "sid" ? Workspace?.Procedures.Sid(t) : Workspace?.Procedures.Star(t);
+                    return name.Length > 0 ? $"{t.Callsign}: {cmd.ToUpperInvariant()} {name}"
+                        : $"{t.Callsign}: {cmd.ToUpperInvariant()} автоматически ({effective ?? "нет"})";
+                });
+            case "drwy":
+            case "arwy":
+                return await WithSelected(async t =>
+                {
+                    string rwy = args.Count > 0 ? args[0].ToUpperInvariant() : "";
+                    await session.AnnotateAsync(t, cmd == "drwy" ? Annotation.DepartureRunway : Annotation.ArrivalRunway, rwy).ConfigureAwait(false);
+                    return rwy.Length == 0 ? $"{t.Callsign}: ВПП по умолчанию" : $"{t.Callsign}: ВПП {rwy}";
+                });
+            case "rwy":
+                return SetRunways(args);
+            case "clr":
+                return await WithSelected(async t =>
+                {
+                    bool value = !t.ClearanceReceived;
+                    await session.AnnotateAsync(t, Annotation.Clearance, value ? "1" : "0").ConfigureAwait(false);
+                    return $"{t.Callsign}: {(value ? "разрешение получено" : "флаг разрешения снят")}";
+                });
+            case "state":
+                return await WithSelected(async t =>
+                {
+                    string state = args.Count > 0 ? args[0].ToUpperInvariant() : "";
+                    if (state is not ("" or "PUSH" or "TAXI" or "DEPA" or "STUP")) return "Статусы: STUP, PUSH, TAXI, DEPA";
+                    await session.AnnotateAsync(t, Annotation.GroundState, state).ConfigureAwait(false);
+                    return state.Length == 0 ? $"{t.Callsign}: статус снят" : $"{t.Callsign}: {state}";
+                });
+            case "route":
+                return await WithSelected(t =>
+                {
+                    t.ShowRoute = !t.ShowRoute;
+                    return Task.FromResult<string?>(t.ShowRoute ? $"{t.Callsign}: маршрут показан" : $"{t.Callsign}: маршрут скрыт");
+                });
+            case "halo":
+                return await WithSelected(t =>
+                {
+                    double nm = 3;
+                    if (args.Count > 0 && !double.TryParse(args[0].Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out nm))
+                        return Task.FromResult<string?>("Пример: .halo 5");
+                    t.HaloNm = nm <= 0 || (args.Count == 0 && t.HaloNm != null) ? null : Math.Min(nm, 50);
+                    return Task.FromResult<string?>(t.HaloNm is { } r ? $"{t.Callsign}: кольцо {r:0.#} NM" : $"{t.Callsign}: кольцо убрано");
+                });
+            case "sep":
+                return Separation(args);
             case "find":
             {
                 if (args.Count == 0) return "Пример: .find AFL123";
@@ -132,12 +259,40 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
                 if (args.Count < 2) return "Пример: .msg AFL123 текст";
                 await session.SendPrivateAsync(args[0], rest[(rest.IndexOf(' ') + 1)..]).ConfigureAwait(false);
                 return null;
+            case "contactme":
+            {
+                var t = args.Count > 0 ? session.Find(args[0]) : selected();
+                if (t == null) return "Выберите борт или укажите позывной";
+                string freq = session.Info is { } i ? Frequency.Format(i.FrequencyKhz) : profile().Station.Frequency;
+                await session.SendPrivateAsync(t.Callsign, $"Please contact me on {freq}").ConfigureAwait(false);
+                return null;
+            }
+            case "wallop":
+                if (rest.Length == 0) return "Пример: .wallop нужна помощь с AFL123";
+                await session.SendSupervisorRequestAsync(rest).ConfigureAwait(false);
+                return "Запрос отправлен супервизорам";
+            case "atis":
+                return Atis(args);
+            case "metar":
+            {
+                string icao = args.Count > 0 ? args[0].ToUpperInvariant() : profile().ActiveAirports.FirstOrDefault() ?? "";
+                if (icao.Length != 4) return "Пример: .metar UUEE";
+                if (Workspace == null) return "Погода недоступна";
+                if (Workspace.Weather.Get(icao) == null) await Workspace.Weather.RefreshAsync([icao]).ConfigureAwait(false);
+                return Workspace.Weather.Get(icao)?.Raw ?? $"METAR {icao} не получен";
+            }
+            case "info":
+            {
+                var lines = ControllerInfoLines();
+                return lines.Count == 0 ? "Информация о диспетчере не задана (Настройки → Станция)" : string.Join('\n', lines);
+            }
             case "freq":
             {
                 if (args.Count == 0 || !Frequency.TryParse(args[0], out var khz)) return "Пример: .freq 118.100";
                 var p = profile();
                 p.Station.Frequency = Frequency.Format(khz);
                 if (session.Info is { } info) await session.UpdateStationAsync(khz, info.VisualRange, info.Center).ConfigureAwait(false);
+                Workspace?.UpdateOwnership();
                 return $"Основная частота {p.Station.Frequency}";
             }
             case "range":
@@ -157,6 +312,20 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
                 if (session.IsConnected) return "Демо-трафик доступен только без подключения к сети";
                 _demo = new DemoTraffic(session, DemoCenter);
                 return "Демо-трафик включён: 10 бортов вокруг сектора. .demo — выключить";
+            case "airport":
+            case "airports":
+            {
+                var p = profile();
+                if (args.Count > 0)
+                {
+                    var codes = args.Select(a => a.ToUpperInvariant()).Where(IsIcao).Distinct().ToList();
+                    if (codes.Count != args.Count) return "Коды аэродромов — 4 символа ICAO, например .airport UUEE UUDD";
+                    p.ActiveAirports = codes;
+                    Changed?.Invoke(this, EventArgs.Empty);
+                    _ = Workspace?.Weather.RefreshAsync();
+                }
+                return p.ActiveAirports.Count == 0 ? "Активных аэродромов нет. Пример: .airport UUEE" : "Активные аэродромы: " + string.Join(' ', p.ActiveAirports);
+            }
             case "plugins":
             {
                 var sb = new StringBuilder();
@@ -178,22 +347,191 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
         return $"Неизвестная команда .{cmd}. Введите .help";
     }
 
-    /// <summary>".ctc UUEE_TWR 118.1" with alias ".ctc" = "contact $1 on $2" → "contact UUEE_TWR on 118.1".</summary>
+    private static string Inv(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static bool IsIcao(string code) => code.Length == 4 && code.All(char.IsLetterOrDigit);
+
+    // ---- runways, ATIS, separation --------------------------------------------------------------
+
+    private string SetRunways(List<string> args)
+    {
+        var p = profile();
+        if (args.Count == 0)
+        {
+            if (p.ActiveRunways.Count == 0) return "Активные ВПП не заданы. Пример: .rwy UUEE 24R 24L";
+            return string.Join('\n', p.ActiveRunways.Select(kv =>
+                $"{kv.Key}: вылет {string.Join(',', kv.Value.Departure)} · посадка {string.Join(',', kv.Value.Arrival)}"));
+        }
+        string icao = args[0].ToUpperInvariant();
+        if (!IsIcao(icao)) return "Пример: .rwy UUEE 24R 24L";
+        if (args.Count == 1)
+        {
+            p.ActiveRunways.Remove(icao);
+            Changed?.Invoke(this, EventArgs.Empty);
+            return $"{icao}: активные ВПП сброшены";
+        }
+        string dep = args[1].ToUpperInvariant(), arr = args.Count > 2 ? args[2].ToUpperInvariant() : dep;
+        var known = Workspace?.Sector?.Runways.Where(r => r.Airport.Equals(icao, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(r => new[] { r.Id1.ToUpperInvariant(), r.Id2.ToUpperInvariant() }).ToHashSet();
+        if (known is { Count: > 0 } && (!known.Contains(dep) || !known.Contains(arr)))
+            return $"{icao}: ВПП {string.Join(", ", known.Order())}";
+        p.ActiveRunways[icao] = new RunwayUse { Departure = [dep], Arrival = [arr] };
+        if (!p.ActiveAirports.Contains(icao, StringComparer.OrdinalIgnoreCase)) p.ActiveAirports.Add(icao);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return $"{icao}: вылет {dep}, посадка {arr}";
+    }
+
+    private string Atis(List<string> args)
+    {
+        var p = profile();
+        if (args.Count == 0)
+            return p.AtisLetters.Count == 0 ? "Пример: .atis UUEE B" : string.Join(' ', p.AtisLetters.Select(kv => $"{kv.Key} {kv.Value}"));
+        string icao = args[0].ToUpperInvariant();
+        if (!IsIcao(icao)) return "Пример: .atis UUEE B";
+        if (args.Count == 1) return p.AtisLetters.TryGetValue(icao, out var l) ? $"{icao}: информация {l}" : $"{icao}: буква ATIS не задана";
+        string letter = args[1].ToUpperInvariant();
+        if (letter == "+")
+        {
+            char current = p.AtisLetters.TryGetValue(icao, out var cur) && cur.Length == 1 ? cur[0] : '@';
+            letter = current is >= 'A' and < 'Z' ? ((char)(current + 1)).ToString() : "A";
+        }
+        if (letter.Length != 1 || letter[0] is < 'A' or > 'Z') return "Буква ATIS — A…Z или +";
+        p.AtisLetters[icao] = letter;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return $"{icao}: информация {letter}";
+    }
+
+    private string Separation(List<string> args)
+    {
+        Track? a, b;
+        if (args.Count >= 2) (a, b) = (session.Find(args[0]), session.Find(args[1]));
+        else if (args.Count == 1) (a, b) = (selected(), session.Find(args[0]));
+        else return "Пример: .sep AFL1 SBI2";
+        if (a == null || b == null) return "Оба борта должны быть на радаре";
+        double now = GeoMath.DistanceNm(a.Position, b.Position);
+        double bearing = GeoMath.BearingDeg(a.Position, b.Position);
+        var (minNm, atMinutes) = ClosestApproach(a, b, 20);
+        string cpa = atMinutes < 0.1 ? "расходятся" : $"минимум {minNm:0.0} NM через {atMinutes:0} мин";
+        return $"{a.Callsign} → {b.Callsign}: {now:0.0} NM, пеленг {bearing:000}°, {cpa}, " +
+               $"по высоте {Math.Abs(a.Altitude - b.Altitude)} ft";
+    }
+
+    /// <summary>Minimum distance within the next <paramref name="minutes"/> on present tracks (1/4-minute steps).</summary>
+    public static (double Nm, double Minutes) ClosestApproach(Track a, Track b, double minutes)
+    {
+        double best = GeoMath.DistanceNm(a.Position, b.Position), at = 0;
+        for (double m = 0.25; m <= minutes; m += 0.25)
+        {
+            double d = GeoMath.DistanceNm(a.Predict(m), b.Predict(m));
+            if (d < best) (best, at) = (d, m);
+        }
+        return (best, at);
+    }
+
+    /// <summary>Accepts a callsign or an .ese identifier ("EA") of an online controller.</summary>
+    public string? ResolveController(string text)
+    {
+        text = text.Trim().ToUpperInvariant();
+        var online = session.Controllers;
+        var exact = online.FirstOrDefault(c => c.Callsign.Equals(text, StringComparison.OrdinalIgnoreCase));
+        if (exact != null) return exact.Callsign;
+        if (Workspace != null)
+        {
+            var byId = online.FirstOrDefault(c => Workspace.ShortName(c.Callsign).Equals(text, StringComparison.OrdinalIgnoreCase));
+            if (byId != null) return byId.Callsign;
+        }
+        // Offline (demo) handoffs go to whatever callsign was typed.
+        return session.IsConnected ? null : AtcSession.IsValidCallsign(text) ? text : null;
+    }
+
+    // ---- aliases ----------------------------------------------------------------------------------
+
+    /// <summary>".ctc UUEE_TWR 118.1" with alias ".ctc" = "contact $1 on $2" → "contact UUEE_TWR on 118.1"; then variables.</summary>
     public string ExpandAlias(string line)
     {
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0 || !profile().Aliases.TryGetValue(parts[0], out var template)) return line;
-        var sb = new StringBuilder(template);
-        for (int i = parts.Length - 1; i >= 1; i--) sb.Replace("$" + i, parts[i]);
-        if (selected() is { } t) sb.Replace("$cs", t.Callsign);
-        return sb.ToString();
+        if (parts.Length == 0) return line;
+        if (profile().Aliases.TryGetValue(parts[0], out var template))
+        {
+            var sb = new StringBuilder(template);
+            for (int i = parts.Length - 1; i >= 1; i--) sb.Replace("$" + i, parts[i]);
+            line = sb.ToString();
+        }
+        return line.Contains('$') ? ExpandVariables(line) : line;
     }
 
-    private string? WithSelected(Func<Track, string?> action)
+    [GeneratedRegex(@"\$(?<name>[a-z]+)(\((?<arg>[A-Za-z0-9$]*)\))?")]
+    private static partial Regex Variable();
+
+    /// <summary>EuroScope-style alias variables: $aircraft, $cfl, $sid, $myfreq, $metar(UUEE), $atiscode(UUEE)...</summary>
+    public string ExpandVariables(string text) =>
+        Variable().Replace(text, m => VariableValue(m.Groups["name"].Value, m.Groups["arg"].Success ? m.Groups["arg"].Value : null) ?? m.Value);
+
+    private static readonly HashSet<string> AircraftVariables =
+        ["aircraft", "cs", "type", "dep", "arr", "alt", "cfl", "temp", "squawk", "route", "sid", "star", "calt", "nextctr", "nextfreq"];
+
+    private string? VariableValue(string name, string? arg)
+    {
+        var p = profile();
+        var t = selected();
+        var inv = CultureInfo.InvariantCulture;
+        string airport = arg is { Length: > 0 } a
+            ? (a == "$myairport" ? p.ActiveAirports.FirstOrDefault() ?? "" : a).ToUpperInvariant()
+            : p.ActiveAirports.FirstOrDefault() ?? "";
+        var metar = Workspace?.Weather.Get(airport);
+        switch (name)
+        {
+            case "mycallsign": return session.Me;
+            case "myfreq": return session.Info is { } i ? Frequency.Format(i.FrequencyKhz) : p.Station.Frequency;
+            case "myrealname": return p.Connection.RealName;
+            case "myairport": return p.ActiveAirports.FirstOrDefault() ?? "";
+            case "time": return DateTime.UtcNow.ToString("HHmm", inv);
+            case "atiscode": return p.AtisLetters.GetValueOrDefault(airport, "");
+            case "metar": return metar?.Raw ?? "";
+            case "wind": return metar?.Wind ?? "";
+            case "qnh": return metar?.Qnh?.ToString(inv) ?? "";
+            case "altim": return metar?.Altimeter ?? "";
+            case "deprwy": return t != null && arg == null ? Workspace?.Procedures.DepartureRunway(t) ?? "" : RunwaysOf(airport, dep: true);
+            case "arrrwy": return t != null && arg == null ? Workspace?.Procedures.ArrivalRunway(t) ?? "" : RunwaysOf(airport, dep: false);
+        }
+        if (t == null) return AircraftVariables.Contains(name) ? "" : null;
+        switch (name)
+        {
+            case "aircraft":
+            case "cs": return t.Callsign;
+            case "type": return t.AircraftType;
+            case "dep": return t.Departure;
+            case "arr": return t.Destination;
+            case "alt": return t.FiledAltitude;
+            case "cfl":
+            case "temp": return t.ClearedAltitude is { } c ? FormatAltitude(c) : "";
+            case "squawk": return (t.AssignedSquawk ?? t.Squawk).ToString("0000", inv);
+            case "route": return t.Route;
+            case "sid": return Workspace?.Procedures.Sid(t) ?? "";
+            case "star": return Workspace?.Procedures.Star(t) ?? "";
+            case "calt": return FormatAltitude(t.Altitude);
+            case "nextctr": return Workspace?.NextController(t) ?? "";
+            case "nextfreq":
+                return Workspace?.NextController(t) is { } n && session.Controllers.FirstOrDefault(x => x.Callsign == n) is { } ctl
+                    ? Frequency.Format(ctl.FrequencyKhz) : "";
+        }
+        return null;
+    }
+
+    private string RunwaysOf(string airport, bool dep) =>
+        profile().ActiveRunways.TryGetValue(airport, out var use) ? string.Join(',', dep ? use.Departure : use.Arrival) : "";
+
+    /// <summary>The profile's controller info lines with variables expanded, empty lines dropped.</summary>
+    public IReadOnlyList<string> ControllerInfoLines() =>
+        profile().ControllerInfo.Select(l => ExpandVariables(l).Trim()).Where(l => l.Length > 0).ToList();
+
+    // ---- helpers ----------------------------------------------------------------------------------
+
+    private async Task<string?> WithSelected(Func<Track, Task<string?>> action)
     {
         var t = selected();
         if (t == null) return "Сначала выберите борт на радаре";
-        var result = action(t);
+        var result = await action(t).ConfigureAwait(false);
         Changed?.Invoke(this, EventArgs.Empty);
         return result;
     }
@@ -214,14 +552,23 @@ public sealed class CommandProcessor(AtcSession session, Func<Profile> profile, 
 
     public static bool IsSquawk(string text) => text.Length == 4 && text.All(c => c is >= '0' and <= '7');
 
-    /// <summary>First code of the profile's squawk range not used or assigned by anyone.</summary>
-    public int? FreeSquawk()
+    private (int From, int To)? SquawkRange()
     {
+        if (Workspace?.SquawkRange() is { } r) return r;
         var range = profile().SquawkRange.Split('-');
         if (range.Length != 2 || !IsSquawk(range[0].Trim()) || !IsSquawk(range[1].Trim())) return null;
-        int from = int.Parse(range[0], CultureInfo.InvariantCulture), to = int.Parse(range[1], CultureInfo.InvariantCulture);
+        return (int.Parse(range[0], CultureInfo.InvariantCulture), int.Parse(range[1], CultureInfo.InvariantCulture));
+    }
+
+    private string SquawkRangeText() =>
+        SquawkRange() is { } r ? $"{r.From:0000}-{r.To:0000}" : profile().SquawkRange;
+
+    /// <summary>First code of the position's (or profile's) squawk range not used or assigned by anyone.</summary>
+    public int? FreeSquawk()
+    {
+        if (SquawkRange() is not { } range) return null;
         var used = new HashSet<int>(session.Tracks.SelectMany(t => new[] { t.Squawk, t.AssignedSquawk ?? -1 }));
-        for (int code = from; code <= to; code++)
+        for (int code = range.From; code <= range.To; code++)
             if (IsSquawk(code.ToString("0000", CultureInfo.InvariantCulture)) && !used.Contains(code)) return code;
         return null;
     }

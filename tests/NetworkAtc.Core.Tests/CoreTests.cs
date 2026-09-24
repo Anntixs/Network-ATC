@@ -86,8 +86,9 @@ public class SectorTests
         Assert.Equal(5, s.Positions.Count);
         Assert.Equal(("UUEE_TWR", "131.500"), (s.Positions[2].Callsign, s.Positions[2].Frequency));
         Assert.Single(s.FreeTexts);
-        Assert.Equal(2, s.SectorLines.Count);
-        var tma = Assert.Single(s.Sectors);
+        Assert.Equal(4, s.SectorLines.Count);
+        Assert.Equal(2, s.Sectors.Count);
+        var tma = s.Sectors[0];
         Assert.Equal(("UUEE_TMA", 0, 9500), (tma.Name, tma.Floor, tma.Ceiling));
         Assert.Equal(["EA", "DC"], tma.Owners);
     }
@@ -206,7 +207,7 @@ public class ProfileTests
     {
         var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
         var p = new Profile { Name = "Tower" };
-        p.Theme = Theme.BuiltIn[2].Clone();
+        p.Theme = Theme.BuiltIn.First(t => t.Name == "Scope Green").Clone();
         p.Tags.Tracked = "{callsign}";
         p.Layers["SID"] = true;
         p.Station.Facility = Facility.Tower;
@@ -357,5 +358,137 @@ public class TagInteractionTests
         File.Delete(path);
         Assert.Equal(TagActions.None, p.ResolveTagClick("cfl", false, false));        // user choice kept
         Assert.Equal(TagActions.Heading, p.ResolveTagClick("hdg", false, false));     // default added
+    }
+}
+
+public class NativeSectorTests
+{
+    private static string Demo(string ext) => Path.Combine(AppContext.BaseDirectory, "demo", "UUEE-demo" + ext);
+
+    [Fact]
+    public void EuroScopeSector_RoundTripsThroughNativeFormat()
+    {
+        var es = SectorParser.LoadFiles(Demo(".sct"));
+        var json = NativeSector.Serialize(es);
+        var back = NativeSector.Parse(json);
+
+        Assert.Equal(es.Name, back.Name);
+        Assert.Equal(es.Center.Latitude, back.Center.Latitude, 5);   // stored with 6 decimals (~10 cm)
+        Assert.Equal(es.Center.Longitude, back.Center.Longitude, 5);
+        Assert.Equal(es.Vors.Count, back.Vors.Count);
+        Assert.Equal(es.Fixes.Select(f => f.Name), back.Fixes.Select(f => f.Name));
+        Assert.Equal(es.Runways.Count, back.Runways.Count);
+        foreach (var layer in es.Lines.Keys)
+        {
+            Assert.Equal(es.Lines[layer].Count, back.Lines[layer].Count);
+            Assert.Equal(es.Lines[layer].Select(l => (l.Name, l.Color)), back.Lines[layer].Select(l => (l.Name, l.Color)));
+        }
+        Assert.Equal(es.Regions[0].Points.Count, back.Regions[0].Points.Count);
+        Assert.Equal(es.Positions, back.Positions);
+        Assert.Equal(es.SectorLines.Keys, back.SectorLines.Keys);
+        Assert.Equal(es.Sectors[0].Owners, back.Sectors[0].Owners);
+        Assert.Contains("\"format\": \"network-atc-sector\"", json);
+    }
+
+    [Fact]
+    public void ConnectedSegmentsBecomeOnePolyline()
+    {
+        var es = SectorParser.LoadFiles(Demo(".sct"));
+        var polylines = NativeSector.JoinSegments(es.Lines["ARTCC"]);
+        var ring = Assert.Single(polylines);     // four touching ARTCC segments
+        Assert.Equal(5, ring.Points!.Count);
+    }
+
+    [Fact]
+    public void LoadsBundledNativeDemo_WithCustomLayer()
+    {
+        var s = SectorLoader.Load(Demo(".natc"));
+        Assert.Equal("Network-ATC", SectorLoader.Describe(Demo(".natc")));
+        var custom = Assert.Single(s.CustomLayers);
+        Assert.Equal("Зона ожидания DEMO5", custom);
+        Assert.Equal("#C08A3E", s.LayerColors[custom]);
+        Assert.Equal(4, s.Lines[custom].Count);
+        Assert.Equal(5, s.Positions.Count);
+    }
+
+    [Fact]
+    public void RejectsForeignOrNewerFiles()
+    {
+        Assert.Throws<InvalidDataException>(() => NativeSector.Parse("""{ "format": "something-else", "version": 1 }"""));
+        Assert.Throws<InvalidDataException>(() => NativeSector.Parse("""{ "format": "network-atc-sector", "version": 99 }"""));
+    }
+}
+
+public class TrafficListTests
+{
+    private static Track Flight(string cs, string dep, string dest, double lat, double lon, int alt, int gs, bool ground)
+    {
+        var t = new Track(cs);
+        t.ApplyFlightPlan(new FiledPlan(cs, "I", "A20N", 450, dep, "1200", "FL350", dest, "", "", "DCT"));
+        t.Update(new PilotReport(cs, true, false, 2000, new GeoPoint(lat, lon), alt, gs, 90, ground, alt), DateTime.UtcNow);
+        return t;
+    }
+
+    [Fact]
+    public void BuildsDepartureAndArrivalLists()
+    {
+        var sector = SectorParser.LoadFiles(Path.Combine(AppContext.BaseDirectory, "demo", "UUEE-demo.sct"));
+        var tracks = new[]
+        {
+            Flight("GATE1", "UUEE", "ULLI", 55.9728, 37.4147, 600, 0, true),     // parked
+            Flight("TAXI2", "UUEE", "URSS", 55.975, 37.41, 600, 15, true),       // taxiing
+            Flight("GONE3", "UUEE", "USSS", 57.5, 37.4, 30000, 450, false),      // far away: out of the list
+            Flight("ARR4", "ULLI", "UUEE", 56.5, 37.41, 12000, 300, false),      // ~32 NM out
+            Flight("ARR5", "URSS", "UUEE", 57.0, 37.41, 20000, 400, false),      // ~62 NM out
+            Flight("OTHER", "UUDD", "ULLI", 56.0, 37.5, 10000, 300, false),
+        };
+        var deps = TrafficLists.Departures(tracks, ["UUEE"], sector);
+        Assert.Equal(["TAXI2", "GATE1"], deps.Select(d => d.Callsign));
+        Assert.Equal("руление", deps[0].Status);
+
+        var arrs = TrafficLists.Arrivals(tracks, ["uuee"], sector);
+        Assert.Equal(["ARR4", "ARR5"], arrs.Select(a => a.Callsign));
+        Assert.Equal(31.6, arrs[0].DistanceNm, 0);
+        Assert.Equal(6, arrs[0].EtaMinutes);
+    }
+
+    [Fact]
+    public async Task AirportCommandSetsActiveAirports()
+    {
+        var profile = new Profile();
+        var cmd = new CommandProcessor(new AtcSession(), () => profile, new PluginRegistry(), () => null);
+        Assert.Equal("Активные аэродромы: UUEE UUDD", await cmd.ExecuteAsync(".airport uuee UUDD"));
+        Assert.Equal(["UUEE", "UUDD"], profile.ActiveAirports);
+        Assert.StartsWith("Коды аэродромов", await cmd.ExecuteAsync(".airport SVO"));
+    }
+}
+
+public class ProfileMigrationTests
+{
+    [Fact]
+    public void OldProfile_GetsNewThemeAndWindows()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """{ "Name": "Old", "Theme": { "Name": "Midnight", "Accent": "#123456" } }""");
+        var p = Profile.Load(path);
+        Assert.Equal("SkyNetwork", p.Theme.Name);
+        Assert.Equal(Profile.CurrentVersion, p.Version);
+        Assert.True(p.Windows["departures"].Visible);
+
+        // A profile saved by the new version keeps the user's theme.
+        p.Theme.Accent = "#654321";
+        p.Save(path);
+        Assert.Equal("#654321", Profile.Load(path).Theme.Accent);
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void RemembersRecentSectors()
+    {
+        var p = new Profile();
+        p.RememberSector("a.sct", "A");
+        p.RememberSector("b.natc", "B");
+        p.RememberSector("A.SCT", "A2");
+        Assert.Equal(["A.SCT", "b.natc"], p.RecentSectors.Select(r => r.Path));
     }
 }

@@ -4,7 +4,7 @@ namespace NetworkAtc.Plugins;
 public static class PluginApiVersion
 {
     public const int Major = 1;
-    public const int Minor = 1;
+    public const int Minor = 2;
 }
 
 /// <summary>
@@ -56,6 +56,18 @@ public interface IAircraft
     int? AssignedSquawk { get; }
     string Scratchpad { get; }
     bool IsTracked { get; }
+
+    /// <summary>Callsign of the controller that has the aircraft assumed, or "" (API 1.2).</summary>
+    string Owner { get; }
+    /// <summary>Pending transfer of control, "" when none (API 1.2).</summary>
+    string HandoffFrom { get; }
+    string HandoffTo { get; }
+    /// <summary>Manually assigned SID/STAR and runways, "" when automatic (API 1.2).</summary>
+    string Sid { get; }
+    string Star { get; }
+    string DepartureRunway { get; }
+    string ArrivalRunway { get; }
+    bool ClearanceReceived { get; }
 }
 
 public enum MessageChannel

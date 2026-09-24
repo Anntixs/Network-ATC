@@ -17,6 +17,7 @@ public sealed class DemoTraffic : IDisposable
         public required string Type { get; init; }
         public required string Dep { get; init; }
         public required string Dest { get; init; }
+        public string Route { get; init; } = "DCT";
         public GeoPoint Position;
         public double Heading;
         public int Speed;
@@ -47,6 +48,7 @@ public sealed class DemoTraffic : IDisposable
             _flights.Add(new Flight
             {
                 Callsign = p.Cs, Type = p.Type, Dep = p.Dep, Dest = p.Dest,
+                Route = p.Dep == "UUEE" ? (i % 2 == 0 ? "DEMO5 DM100" : "DEMO4 DM100") : p.Dest == "UUEE" ? (i % 2 == 0 ? "DM100 DEMO2" : "DEMO3") : "DCT",
                 Position = GeoMath.Offset(center, brg, 15 + rnd.NextDouble() * 35),
                 Heading = (brg + 150 + rnd.NextDouble() * 60) % 360,
                 Speed = p.Type == "C172" ? 105 : 240 + rnd.Next(0, 200),
@@ -61,7 +63,7 @@ public sealed class DemoTraffic : IDisposable
 
         foreach (var f in _flights)
             _session.OnPacket(this, FsdPacket.Parse(
-                $"$FP{f.Callsign}:*A:I:{f.Type}:{f.Speed + 30}:{f.Dep}:1200:0:FL{(int)Math.Max(f.Altitude + 10000, 20000) / 100}:{f.Dest}:1:30:3:0::/V/ demo:DCT")!);
+                $"$FP{f.Callsign}:*A:I:{f.Type}:{f.Speed + 30}:{f.Dep}:1200:0:FL{(int)Math.Max(f.Altitude + 10000, 20000) / 100}:{f.Dest}:1:30:3:0::/V/ demo:{f.Route}")!);
         _timer = new Timer(_ => Tick(), null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
     }
 

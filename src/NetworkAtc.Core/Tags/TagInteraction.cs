@@ -14,6 +14,12 @@ public static class TagActions
     public const string Scratchpad = "scratch";
     public const string FlightPlan = "fp";
     public const string PrivateMessage = "msg";
+    /// <summary>Assume, accept or offer the aircraft (transfer of control menu).</summary>
+    public const string Handoff = "handoff";
+    public const string Procedure = "proc";
+    public const string Runway = "rwy";
+    public const string Clearance = "clr";
+    public const string Route = "route";
     /// <summary>The click handler a plugin registered for its own field.</summary>
     public const string Plugin = "plugin";
 
@@ -30,6 +36,11 @@ public static class TagActions
         (Scratchpad, "Редактировать заметку"),
         (FlightPlan, "Открыть план полёта"),
         (PrivateMessage, "Личное сообщение"),
+        (Handoff, "Передача борта"),
+        (Procedure, "SID / STAR"),
+        (Runway, "ВПП"),
+        (Clearance, "Флаг «разрешение получено»"),
+        (Route, "Показать маршрут"),
         (Plugin, "Обработчик плагина"),
     ];
 }

@@ -24,9 +24,9 @@
           <ListBoxItem Content="Интерфейс"/>
           <ListBoxItem Content="Теги"/>
           <ListBoxItem Content="Цели и карта"/>
-          <ListBoxItem Content="STCA и коды"/>
+          <ListBoxItem Content="STCA, коды, CLAM"/>
           <ListBoxItem Content="Горячие клавиши"/>
-          <ListBoxItem Content="Алиасы"/>
+          <ListBoxItem Content="Алиасы и ATIS"/>
           <ListBoxItem Content="Плагины"/>
         </ListBox>
       </StackPanel>
@@ -75,13 +75,27 @@
           <TextBox Text="{Binding Panels.UiFontSize}"/>
           <TextBlock Text="Масштаб интерфейса (1 = 100 %)" Style="{StaticResource FieldLabel}"/>
           <TextBox Text="{Binding Panels.UiScale}"/>
-          <TextBlock Text="Ширина боковой панели, px" Style="{StaticResource FieldLabel}"/>
-          <TextBox Text="{Binding Panels.SidePanelWidth}"/>
-          <TextBlock Text="Высота панели сообщений, px" Style="{StaticResource FieldLabel}"/>
-          <TextBox Text="{Binding Panels.MessagesHeight}"/>
-          <CheckBox Content="Показывать боковую панель" IsChecked="{Binding Panels.ShowAircraftList}" Margin="0,14,0,0"/>
-          <CheckBox Content="Показывать сообщения" IsChecked="{Binding Panels.ShowMessages}"/>
+          <TextBlock Text="Активные аэродромы (через пробел)" Style="{StaticResource FieldLabel}"/>
+          <TextBox x:Name="AirportsBox" CharacterCasing="Upper" ToolTip="Списки вылета и прилёта строятся по этим аэродромам; то же — команда .airport"/>
+          <CheckBox Content="Окно выбора сектора при запуске" IsChecked="{Binding ShowSectorSelection}" Margin="0,14,0,0"/>
           <CheckBox Content="Открывать план полёта при выборе борта" IsChecked="{Binding Panels.ShowFlightPlan}"/>
+          <CheckBox x:Name="ResetWindowsBox" Content="Расставить окна списков по умолчанию" Margin="0,14,0,0"/>
+          <CheckBox Content="Загружать METAR активных аэродромов (aviationweather.gov)" IsChecked="{Binding FetchMetar}" Margin="0,8,0,0"/>
+
+          <TextBlock Text="ЗВУКИ" Style="{StaticResource SectionTitle}"/>
+          <CheckBox Content="Звуки включены" IsChecked="{Binding Sounds.Enabled}" FontWeight="SemiBold"/>
+          <UniformGrid Columns="2" Margin="0,4,0,0">
+            <CheckBox Content="Сообщение на частоте" IsChecked="{Binding Sounds.RadioMessage}"/>
+            <CheckBox Content="Личное сообщение" IsChecked="{Binding Sounds.PrivateMessage}"/>
+            <CheckBox Content="Вам передают борт" IsChecked="{Binding Sounds.HandoffRequest}"/>
+            <CheckBox Content="Передачу приняли" IsChecked="{Binding Sounds.HandoffAccepted}"/>
+            <CheckBox Content="Передачу отклонили" IsChecked="{Binding Sounds.HandoffRefused}"/>
+            <CheckBox Content="Point-out" IsChecked="{Binding Sounds.PointOut}"/>
+            <CheckBox Content="Конфликт (STCA)" IsChecked="{Binding Sounds.ConflictAlert}"/>
+            <CheckBox Content="Подключение / отключение" IsChecked="{Binding Sounds.Connection}"/>
+          </UniformGrid>
+          <TextBlock Text="Громкость (0–1)" Style="{StaticResource FieldLabel}"/>
+          <Slider Minimum="0" Maximum="1" Value="{Binding Sounds.Volume}" Width="220" HorizontalAlignment="Left"/>
         </StackPanel>
 
         <!-- 2: tags -->
@@ -196,7 +210,7 @@
           </UniformGrid>
           <CheckBox Content="Показывать борты на земле" IsChecked="{Binding Targets.ShowGroundTraffic}" Margin="0,12,0,0"/>
           <TextBlock Text="КАРТА" Style="{StaticResource SectionTitle}"/>
-          <TextBlock Text="Файл сектора (.sct)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+          <TextBlock Text="Файл сектора (.natc или .sct)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
           <DockPanel>
             <Button DockPanel.Dock="Right" Content="Обзор…" Click="OnBrowseSector" Margin="8,0,0,0"/>
             <TextBox Text="{Binding SectorFile}"/>
@@ -215,7 +229,7 @@
 
         <!-- 4: STCA -->
         <StackPanel x:Name="Page4" Visibility="Collapsed" MaxWidth="520" HorizontalAlignment="Left">
-          <TextBlock Text="STCA и коды" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="STCA, коды, CLAM" FontSize="20" FontWeight="SemiBold"/>
           <CheckBox Content="Предупреждение о конфликтах (STCA)" IsChecked="{Binding StcaEnabled}" Margin="0,14,0,0"/>
           <UniformGrid Columns="2">
             <StackPanel Margin="0,0,8,0">
@@ -229,6 +243,9 @@
           </UniformGrid>
           <TextBlock Text="Диапазон кодов ответчика для .sq" Style="{StaticResource FieldLabel}"/>
           <TextBox Text="{Binding SquawkRange}" Width="160" HorizontalAlignment="Left"/>
+          <TextBlock Text="Если у вашей позиции в .ese задан свой диапазон кодов, используется он." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+          <TextBlock Text="CLAM: отклонение от разрешённой высоты, фт" Style="{StaticResource FieldLabel}"/>
+          <TextBox Text="{Binding ClamFeet}" Width="160" HorizontalAlignment="Left"/>
         </StackPanel>
 
         <!-- 5: keys -->
@@ -250,9 +267,15 @@
 
         <!-- 6: aliases -->
         <StackPanel x:Name="Page6" Visibility="Collapsed">
-          <TextBlock Text="Алиасы" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="Алиасы и информация" FontSize="20" FontWeight="SemiBold"/>
           <TextBlock Text="По одному на строку: .ctc = contact $1 on $2, good day. $1, $2… — слова после алиаса, $cs — выбранный борт." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,12"/>
-          <TextBox x:Name="AliasBox" AcceptsReturn="True" Height="360" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Top"
+          <TextBox x:Name="AliasBox" AcceptsReturn="True" Height="260" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Top"
+                   VerticalScrollBarVisibility="Auto"/>
+          <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,0"
+                     Text="Переменные: $aircraft $type $dep $arr $alt $cfl $squawk $route $sid $star $deprwy $arrrwy $calt $nextctr $nextfreq $mycallsign $myfreq $myrealname $myairport $time $metar(UUEE) $wind(UUEE) $qnh(UUEE) $altim(UUEE) $atiscode(UUEE)"/>
+          <TextBlock Text="ИНФОРМАЦИЯ О ДИСПЕТЧЕРЕ" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Пилоты получают эти строки по запросу (как ATIS в EuroScope). Переменные тоже работают." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+          <TextBox x:Name="ControllerInfoBox" AcceptsReturn="True" Height="110" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Top"
                    VerticalScrollBarVisibility="Auto"/>
         </StackPanel>
 
