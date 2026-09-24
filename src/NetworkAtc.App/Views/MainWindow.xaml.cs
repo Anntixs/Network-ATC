@@ -205,6 +205,29 @@ public partial class MainWindow : Window
         _stca.VerticalFeet = _profile.StcaVerticalFeet;
         FontSize = _profile.Panels.UiFontSize;
         Root.LayoutTransform = Math.Abs(_profile.Panels.UiScale - 1) < 0.01 ? Transform.Identity : new ScaleTransform(_profile.Panels.UiScale, _profile.Panels.UiScale);
+        ShowFilter();
+        _dirty = true;
+    }
+
+    private void ShowFilter()
+    {
+        FilterLowBox.Text = (Math.Max(0, _profile.Targets.FilterFloor) / 100).ToString("000");
+        FilterHighBox.Text = (Math.Min(_profile.Targets.FilterCeiling, 99900) / 100).ToString("000");
+    }
+
+    private void OnFilterKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        OnFilterChanged(sender, e);
+        Radar.Focus();
+    }
+
+    private void OnFilterChanged(object sender, RoutedEventArgs e)
+    {
+        if (int.TryParse(FilterLowBox.Text.Trim().TrimStart('F', 'f', 'A', 'a'), out var low) && low >= 0) _profile.Targets.FilterFloor = low == 0 ? -1000 : low * 100;
+        if (int.TryParse(FilterHighBox.Text.Trim().TrimStart('F', 'f', 'A', 'a'), out var high) && high > 0)
+            _profile.Targets.FilterCeiling = high >= 999 ? 999999 : high * 100;
+        ShowFilter();
         _dirty = true;
     }
 

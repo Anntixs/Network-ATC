@@ -55,6 +55,13 @@
           </Border>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+          <!-- Altitude filter, hundreds of feet (EuroScope's filter below / above). -->
+          <TextBlock Text="ФИЛЬТР" Style="{StaticResource Muted}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+          <TextBox x:Name="FilterLowBox" Width="40" Height="22" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Center"
+                   ToolTip="Не показывать борта ниже, сотни футов (0 — без фильтра)" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
+          <TextBlock Text="–" Style="{StaticResource Muted}" Margin="3,0" VerticalAlignment="Center"/>
+          <TextBox x:Name="FilterHighBox" Width="40" Height="22" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Center"
+                   ToolTip="Не показывать борта выше, сотни футов" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
           <TextBlock x:Name="SectorText" Text="Нет сектора" Style="{StaticResource Muted}" Margin="10,0,12,0" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
           <TextBlock x:Name="RangeText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,12,0"/>
           <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8,0" Height="22" Background="{DynamicResource BgBrush}">
