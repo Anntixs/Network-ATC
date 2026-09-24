@@ -223,7 +223,7 @@ public partial class MainWindow : Window
 
     private void LoadPlugins()
     {
-        _plugins.LoadFrom(Path.Combine(Profile.DefaultDirectory, "plugins"));
+        _plugins.LoadFrom(PluginFolder);
         _plugins.LoadFrom(Path.Combine(AppContext.BaseDirectory, "plugins"));
         foreach (var p in _plugins.Plugins) Info($"Плагин: {p.Plugin.Name} {p.Plugin.Version}");
         foreach (var e in _plugins.Errors) Error($"Плагин {Path.GetFileName(e.File)}: {e.Reason}");
@@ -986,6 +986,7 @@ public partial class MainWindow : Window
         ConnectText.Text = connected ? "В СЕТИ" : "ПОДКЛЮЧИТЬСЯ";
         ConnectDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "SuccessBrush" : "DangerBrush");
         StationText.Text = connected && _session.Info is { } i ? $"{i.Callsign}  {Frequency.Format(i.FrequencyKhz)}" : "";
+        StationBox.Visibility = StationText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (!connected) AtcList.ItemsSource = null;
         // Voice follows the network connection; its failures never break the network session.
         if (connected && !_wasConnected && _session.Info is { } info)
@@ -1183,6 +1184,132 @@ public partial class MainWindow : Window
             _profile.Layers[item.Key] = item.Visible;
             _dirty = true;
         }
+    }
+
+    private static string PluginFolder => Path.Combine(Profile.DefaultDirectory, "plugins");
+
+    private static MenuItem MenuEntry(string header, Action click, string? gesture = null)
+    {
+        var item = new MenuItem { Header = header, InputGestureText = gesture ?? "" };
+        item.Click += (_, _) => click();
+        return item;
+    }
+
+    /// <summary>ФАЙЛ: sectors, the EuroScope profile import and the recent sectors.</summary>
+    private void OnFileClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = FileButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        menu.Items.Add(MenuEntry("Открыть сектор…", () => OnOpenSectorClick(this, new RoutedEventArgs()), "Ctrl+O"));
+        menu.Items.Add(MenuEntry("Импорт профиля EuroScope (.prf)…", ImportEuroScopeProfile));
+        var recent = _profile.RecentSectors.Where(r => File.Exists(r.Path)).Take(8).ToList();
+        if (recent.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var r in recent)
+                menu.Items.Add(MenuEntry($"{r.Name}  ·  {Path.GetFileName(r.Path)}", () =>
+                {
+                    _profile.ViewCenterLatitude = 0;
+                    LoadSector(r.Path);
+                    SaveProfile();
+                }));
+        }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("Выход", Close, "Alt+F4"));
+        menu.IsOpen = true;
+    }
+
+    /// <summary>ПЛАГИНЫ: loaded Network-ATC plugins, their errors and the map layers taken from EuroScope plugins.</summary>
+    private void OnPluginsClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = PluginsButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        if (_plugins.Plugins.Count == 0 && _plugins.Errors.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "Плагинов Network-ATC нет", IsEnabled = false });
+        foreach (var p in _plugins.Plugins)
+            menu.Items.Add(new MenuItem { Header = $"{p.Plugin.Name}  {p.Plugin.Version}", IsEnabled = false });
+        foreach (var err in _plugins.Errors)
+            menu.Items.Add(new MenuItem { Header = $"✕ {Path.GetFileName(err.File)}: {err.Reason}", IsEnabled = false });
+        if (_profile.ImportedPlugins.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(new MenuItem { Header = "Из профиля EuroScope", IsEnabled = false });
+            foreach (var name in _profile.ImportedPlugins)
+                menu.Items.Add(new MenuItem { Header = "    " + name, IsEnabled = false });
+        }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuEntry("Открыть папку плагинов", () =>
+        {
+            Directory.CreateDirectory(PluginFolder);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(PluginFolder) { UseShellExecute = true });
+        }));
+        menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Imports a whole EuroScope profile: sector, symbology, tags, settings, aliases, the first ASR and the data
+    /// of TopSky, Ground Radar and CCAMS. The sector with the plugin maps is saved as .natc so the maps stay.
+    /// </summary>
+    private void ImportEuroScopeProfile()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Профиль EuroScope", Filter = "Профиль EuroScope (*.prf)|*.prf|Все файлы|*.*" };
+        if (dialog.ShowDialog(this) != true) return;
+        NetworkAtc.Core.Import.EuroScopeImportResult result;
+        try
+        {
+            result = NetworkAtc.Core.Import.EuroScopeImport.Import(dialog.FileName, _profile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error($"Импорт профиля: {ex.Message}");
+            return;
+        }
+        try
+        {
+            var folder = Path.Combine(Profile.DefaultDirectory, "sectors");
+            Directory.CreateDirectory(folder);
+            result.SaveNativeSector(Path.Combine(folder, result.Source.Name + ".natc"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            result.Report.Warn($"Сектор с картами плагинов не сохранён: {ex.Message}");
+        }
+        _profile = result.Profile;
+        ApplyProfile();
+        LoadSector(_profile.SectorFile);
+        SaveProfile();
+        _dirty = true;
+        Info($"Профиль EuroScope «{result.Source.Name}» импортирован: {result.Report.Imported.Count()} импортировано, " +
+             $"{result.Report.Skipped.Count()} пропущено, {result.Report.Warnings.Count()} предупреждений");
+        ShowImportReport(result.Source.Name, result.Report);
+    }
+
+    private void ShowImportReport(string name, NetworkAtc.Core.Import.ImportReport report)
+    {
+        string Section(string title, IEnumerable<string> lines)
+        {
+            var list = lines.ToList();
+            return list.Count == 0 ? "" : $"{title}\n" + string.Join("\n", list.Select(l => "  • " + l)) + "\n\n";
+        }
+        var text = Section("ИМПОРТИРОВАНО", report.Imported) + Section("ПРЕДУПРЕЖДЕНИЯ", report.Warnings) + Section("ПРОПУЩЕНО", report.Skipped);
+        var window = new Window
+        {
+            Title = $"Импорт профиля EuroScope — {name}",
+            Owner = this,
+            Width = 720,
+            Height = 560,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Style = (Style)FindResource("AtcWindow"),
+            Content = new TextBox
+            {
+                Text = text.TrimEnd(),
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = (FontFamily)FindResource("MonoFont"),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(14),
+            },
+        };
+        window.Show();
     }
 
     private void OnOpenSectorClick(object sender, RoutedEventArgs e)
