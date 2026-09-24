@@ -393,7 +393,7 @@ public class ProfileV3Tests
         File.Delete(path);
         Assert.Equal(TagLayouts.DefaultUntracked, p.Tags.Untracked);
         Assert.Equal("{callsign} mine", p.Tags.Tracked);
-        Assert.Equal(3, p.Version);
+        Assert.Equal(Profile.CurrentVersion, p.Version);
         Assert.Equal(TagActions.Handoff, p.TagClicks["owner"].Left);
         Assert.Equal("F12", p.KeyBindings["AssumeOrAccept"]);
     }

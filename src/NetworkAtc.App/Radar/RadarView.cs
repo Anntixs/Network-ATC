@@ -67,6 +67,8 @@ public sealed class RadarView : FrameworkElement
     public PluginRegistry? Plugins { get; set; }
     public Func<IReadOnlyList<Track>> Tracks { get; set; } = () => [];
     public IReadOnlyList<Conflict> Conflicts { get; set; } = [];
+    /// <summary>Aircraft heard on the radio right now (voice): drawn with a ring around the symbol.</summary>
+    public Func<string, bool> IsHeard { get; set; } = _ => false;
     public Track? Selected { get; private set; }
     public Track? Hovered { get; private set; }
     /// <summary>Tag states, warnings, routes and runways (EuroScope logic); optional.</summary>
@@ -463,6 +465,7 @@ public sealed class RadarView : FrameworkElement
                 DrawSmallText(dc, $"{halo:0.#}", new Point(p.X + r * 0.7 + 2, p.Y - r * 0.7 - 12), theme.Halo, 9.5);
             }
             if (selected) dc.DrawEllipse(null, Paint.Pen(theme.TagSelected, 1), p, s + 8, s + 8);
+            if (IsHeard(t.Callsign)) dc.DrawEllipse(null, Paint.Pen(theme.Accent, 2), p, s + 11, s + 11);
 
             DrawTag(dc, t, p, theme, selected || hovered, emergency || conflicted.Contains(t.Callsign), dip);
         }

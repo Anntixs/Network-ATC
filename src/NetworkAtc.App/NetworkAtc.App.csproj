@@ -13,6 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetworkAtc.Core\NetworkAtc.Core.csproj" />
+    <ProjectReference Include="..\SkyNetwork.Voice\SkyNetwork.Voice.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\demo\UUEE-demo.*" LinkBase="demo" CopyToOutputDirectory="PreserveNewest" />

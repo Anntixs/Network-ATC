@@ -22,6 +22,12 @@
           <ToggleButton x:Name="LayersButton" Content="КАРТЫ" Style="{StaticResource MenuToggle}" Click="OnLayersClick" ToolTip="Слои карты (F6)"/>
           <Button x:Name="ListsButton" Content="СПИСКИ ▾" Style="{StaticResource MenuButton}" Click="OnListsClick"/>
           <Button Content="ВПП" Style="{StaticResource MenuButton}" Click="OnRunwaysClick" ToolTip="Активные аэродромы, ВПП и ATIS (Ctrl+R)"/>
+          <Button x:Name="VoiceButton" Style="{StaticResource MenuButton}" Click="OnVoiceClick" ToolTip="Голосовая связь: частоты, тангента, аудио">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse x:Name="VoiceDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,7,0"/>
+              <TextBlock Text="РАДИО"/>
+            </StackPanel>
+          </Button>
           <Button Content="НАСТРОЙКИ" Style="{StaticResource MenuButton}" Click="OnSettingsClick"/>
           <Border Width="1" Margin="10,8" Background="{DynamicResource BorderBrush}"/>
           <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource MenuButton}">
@@ -388,7 +394,15 @@
           <TextBlock x:Name="AselText" Text="—" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" Foreground="#F2C94C"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-          <TextBlock x:Name="TxText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="12,0"/>
+          <TextBlock x:Name="RxText" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
+                     MaxWidth="420" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" ToolTip="Кого сейчас слышно"/>
+          <Button x:Name="PttButton" Content="PTT" Style="{StaticResource MenuButton}" Margin="10,0,0,0" Visibility="Collapsed"
+                  PreviewMouseLeftButtonDown="OnPttDown" PreviewMouseLeftButtonUp="OnPttUp" LostMouseCapture="OnPttLost"
+                  ToolTip="Держите, чтобы говорить (тангента)"/>
+          <!-- Primary frequency; turns red while transmitting. -->
+          <Border x:Name="TxBadge" CornerRadius="3" Padding="6,1" Margin="6,0" VerticalAlignment="Center">
+            <TextBlock x:Name="TxText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}"/>
+          </Border>
           <TextBlock x:Name="CursorText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="11" Width="210"/>
         </StackPanel>
         <TextBox x:Name="CommandLine" FontFamily="{StaticResource MonoFont}" Padding="8,2" KeyDown="OnCommandKeyDown"

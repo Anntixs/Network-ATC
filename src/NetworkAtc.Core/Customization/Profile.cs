@@ -78,6 +78,38 @@ public sealed class ConnectionSettings
     public string RealName { get; set; } = "";
 }
 
+/// <summary>A frequency the controller listens to (and may transmit on) besides the primary one.</summary>
+public sealed class VoiceFrequency
+{
+    public string Frequency { get; set; } = "";
+    public bool Receive { get; set; } = true;
+    public bool Transmit { get; set; }
+    public double Volume { get; set; } = 1;
+}
+
+/// <summary>Radio voice: frequencies, audio devices, push-to-talk ("Голосовая связь" dialog).</summary>
+public sealed class VoiceOptions
+{
+    public const int DefaultPort = 3782;
+    /// <summary>At most this many extra frequencies: the server takes 8 transceivers, the primary uses one.</summary>
+    public const int MaxExtraFrequencies = 7;
+
+    /// <summary>Connect the voice server together with the network connection.</summary>
+    public bool Enabled { get; set; } = true;
+    public int Port { get; set; } = DefaultPort;
+    public bool PrimaryReceive { get; set; } = true;
+    public bool PrimaryTransmit { get; set; } = true;
+    public double PrimaryVolume { get; set; } = 1;
+    public List<VoiceFrequency> Frequencies { get; set; } = [];
+    /// <summary>Audio devices by name ("" = Windows default): indices change when devices are plugged in.</summary>
+    public string InputDevice { get; set; } = "";
+    public string OutputDevice { get; set; } = "";
+    public double MicGain { get; set; } = 1;
+    public double OutputVolume { get; set; } = 1;
+    /// <summary>Push-to-talk control as stored by the voice library: "key:162", "joy:0:4" or "" (none).</summary>
+    public string PushToTalk { get; set; } = "";
+}
+
 /// <summary>Position, size and visibility of a floating list window.</summary>
 public sealed class WindowLayout
 {
@@ -113,7 +145,7 @@ public sealed class PanelSettings
 public sealed class Profile
 {
     /// <summary>Profile format version, used to migrate old profiles.</summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     public int Version { get; set; }
 
     public string Name { get; set; } = "Default";
@@ -177,6 +209,7 @@ public sealed class Profile
     public StationSettings Station { get; set; } = new();
     public ConnectionSettings Connection { get; set; } = new();
     public PanelSettings Panels { get; set; } = new();
+    public VoiceOptions Voice { get; set; } = new();
 
     public int TransitionAltitude { get; set; } = 10000;
     public double RangeRingSpacingNm { get; set; } = 10;
@@ -313,7 +346,17 @@ public sealed class Profile
                     if (p.Tags.Tracked == TagLayouts.OldDefaults[1]) p.Tags.Tracked = TagLayouts.DefaultTracked;
                     if (p.Tags.Detailed == TagLayouts.OldDefaults[2]) p.Tags.Detailed = TagLayouts.DefaultDetailed;
                 }
+                if (p.Version < 4)
+                {
+                    // Version 4: radio voice. Older profiles have no voice settings: start from the defaults
+                    // (voice on, port 3782, primary frequency RX+TX, no push-to-talk key).
+                    p.Voice = new VoiceOptions();
+                }
                 p.Version = CurrentVersion;
+                p.Voice ??= new VoiceOptions();
+                p.Voice.Frequencies ??= [];
+                p.Voice.Frequencies.RemoveAll(f => f == null);
+                if (p.Voice.Port is <= 0 or > 65535) p.Voice.Port = VoiceOptions.DefaultPort;
                 p.ActiveRunways = new Dictionary<string, Sectors.RunwayUse>(p.ActiveRunways ?? [], StringComparer.OrdinalIgnoreCase);
                 p.AtisLetters = new Dictionary<string, string>(p.AtisLetters ?? [], StringComparer.OrdinalIgnoreCase);
                 p.ControllerInfo ??= [];

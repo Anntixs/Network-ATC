@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetworkAtc.PluginApi\NetworkAtc.PluginApi.csproj" />
+    <ProjectReference Include="..\SkyNetwork.Voice\SkyNetwork.Voice.csproj" />
     <InternalsVisibleTo Include="NetworkAtc.Core.Tests" />
   </ItemGroup>
 </Project>
