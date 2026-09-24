@@ -517,11 +517,12 @@ public sealed class EsBridge : IAsyncDisposable
             case EsMsg.PluginLoaded:
             {
                 var p = new EsPluginInfo(r.I32(), r.Str(), r.Str(), r.Str(), r.Str(), r.Str());
-                _plugins[p.Id] = p;
-                // Items registered in the constructor came before we knew the name.
+                // Items registered in the constructor came before we knew the name. The plugin itself is
+                // published last, so whoever sees it also sees its items under its name.
                 foreach (var (key, item) in _items.Where(kv => kv.Key.Item1 == p.Id).ToList()) _items[key] = item with { PluginName = p.Name };
                 foreach (var (key, item) in _functions.Where(kv => kv.Key.Item1 == p.Id).ToList()) _functions[key] = item with { PluginName = p.Name };
                 foreach (var (key, d) in _displayTypes.Where(kv => kv.Value.PluginId == p.Id).ToList()) _displayTypes[key] = d with { PluginName = p.Name };
+                _plugins[p.Id] = p;
                 Log?.Invoke($"Плагин EuroScope {p.Name} {p.Version} загружен", false);
                 Changed?.Invoke();
                 break;
