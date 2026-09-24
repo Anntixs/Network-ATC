@@ -49,6 +49,13 @@ jobs:
           Copy-Item examples/SamplePlugin/bin/Release/net8.0/SamplePlugin.dll publish/Network-ATC/plugin-examples/
           Copy-Item src/NetworkAtc.PluginApi/bin/Release/net8.0/NetworkAtc.PluginApi.xml publish/Network-ATC/ -ErrorAction SilentlyContinue
           if (-not (Test-Path publish/Network-ATC/Network-ATC.exe)) { throw "Network-ATC.exe missing" }
+          # EuroScope plugins run in a 32-bit host next to the program (esbridge folder).
+          cmake -S native/EsBridge -B build/esbridge -A Win32
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build/esbridge --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force publish/Network-ATC/esbridge | Out-Null
+          Copy-Item build/esbridge/Release/EuroScopePlugInDll.dll, build/esbridge/Release/NetworkAtc.EsHost.exe publish/Network-ATC/esbridge/
           Compress-Archive -Path publish/Network-ATC -DestinationPath "${{ steps.version.outputs.name }}.zip"
 
       - name: Installer
