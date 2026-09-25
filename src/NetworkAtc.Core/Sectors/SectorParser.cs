@@ -165,7 +165,7 @@ public static partial class SectorParser
             if (t.Length > latIndex + 1 && TryParseCoordinate(t[latIndex], out var lat) && TryParseCoordinate(t[latIndex + 1], out var lon))
                 target.Add(new NamedPoint(t[0], new GeoPoint(lat, lon), hasFrequency ? t[1] : ""));
             else
-                sector.Warnings.Add($"строка {line.Number}: не удалось прочитать точку");
+                sector.Warnings.Add($"line {line.Number}: could not read the point");
         }
     }
 
@@ -184,7 +184,7 @@ public static partial class SectorParser
             }
             else
             {
-                sector.Warnings.Add($"строка {line.Number}: не удалось прочитать ВПП");
+                sector.Warnings.Add($"line {line.Number}: could not read the runway");
             }
         }
     }
@@ -229,7 +229,7 @@ public static partial class SectorParser
             }
             if (t.Count < 4)
             {
-                sector.Warnings.Add($"[{section}] строка {line.Number}: мало значений");
+                sector.Warnings.Add($"[{section}] line {line.Number}: too few values");
                 continue;
             }
             var coords = t.GetRange(t.Count - 4, 4);
@@ -240,7 +240,7 @@ public static partial class SectorParser
             if (TryResolve(coords[0], coords[1], points, out var a) && TryResolve(coords[2], coords[3], points, out var b))
                 result.Add(new SectorLine(name, a, b, color));
             else
-                sector.Warnings.Add($"[{section}] строка {line.Number}: неизвестная точка");
+                sector.Warnings.Add($"[{section}] line {line.Number}: unknown point");
         }
         return result;
     }
@@ -276,7 +276,7 @@ public static partial class SectorParser
                 continue;
             }
             if (t.Length >= 2 && TryResolve(t[0], t[1], points, out var q)) current.Add(q);
-            else sector.Warnings.Add($"[REGIONS] строка {line.Number}: не удалось прочитать точку");
+            else sector.Warnings.Add($"[REGIONS] line {line.Number}: could not read the point");
         }
         Flush();
     }

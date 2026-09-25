@@ -26,11 +26,11 @@ public static class TrafficLists
             if (!t.OnGround && airport != null && t.LastUpdate != default &&
                 GeoMath.DistanceNm(airport.Value, t.Position) > DepartureRadiusNm)
                 continue;
-            string status = t.LastUpdate == default ? "нет связи" : t.OnGround ? (t.GroundSpeed > 30 ? "разбег" : t.GroundSpeed > 3 ? "руление" : "стоянка") : "взлёт";
+            string status = t.LastUpdate == default ? "no data" : t.OnGround ? (t.GroundSpeed > 30 ? "takeoff roll" : t.GroundSpeed > 3 ? "taxiing" : "parked") : "airborne";
             rows.Add(new DepartureRow(t, t.Callsign, t.AircraftType, t.Destination, t.FiledAltitude,
                 (t.AssignedSquawk ?? t.Squawk).ToString("0000"), status));
         }
-        return rows.OrderBy(r => r.Status == "стоянка").ThenBy(r => r.Callsign).ToList();
+        return rows.OrderBy(r => r.Status == "parked").ThenBy(r => r.Callsign).ToList();
     }
 
     public static IReadOnlyList<ArrivalRow> Arrivals(IEnumerable<Track> tracks, IReadOnlyCollection<string> activeAirports, SectorFile? sector)

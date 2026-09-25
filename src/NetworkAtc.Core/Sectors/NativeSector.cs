@@ -32,9 +32,9 @@ public static class NativeSector
 
     public static SectorFile Parse(string json)
     {
-        var doc = JsonSerializer.Deserialize<Document>(json, Json) ?? throw new InvalidDataException("Пустой файл сектора");
-        if (doc.Format != FormatId) throw new InvalidDataException("Это не сектор Network-ATC");
-        if (doc.Version > Version) throw new InvalidDataException($"Сектор версии {doc.Version} новее программы (поддерживается {Version})");
+        var doc = JsonSerializer.Deserialize<Document>(json, Json) ?? throw new InvalidDataException("Empty sector file");
+        if (doc.Format != FormatId) throw new InvalidDataException("Not a Network-ATC sector");
+        if (doc.Version > Version) throw new InvalidDataException($"Sector version {doc.Version} is newer than this program supports ({Version})");
 
         var s = new SectorFile
         {

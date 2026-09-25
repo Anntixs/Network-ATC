@@ -493,7 +493,7 @@ CFlightPlanList CPlugIn::RegisterFpList(const char* sListName)
 void CPlugIn::RegisterToolbarItem(int ItemId, const char* sItemName)
 {
     // Toolbar items are not used by EuroScope any more; noted for the log only.
-    Engine::Get().Log(GetPlugInName() + std::string(": панель инструментов (") + Str(sItemName) + ", " + std::to_string(ItemId) + ") не поддерживается");
+    Engine::Get().Log(GetPlugInName() + std::string(": toolbar item (") + Str(sItemName) + ", " + std::to_string(ItemId) + ") is not supported");
 }
 
 void CPlugIn::RefreshToolbar(bool ResizeToo) { (void)ResizeToo; }

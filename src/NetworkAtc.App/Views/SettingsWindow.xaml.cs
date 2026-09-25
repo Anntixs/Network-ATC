@@ -70,15 +70,15 @@ public partial class SettingsWindow : Window
 {
     private static readonly Dictionary<string, string> ActionTitles = new()
     {
-        ["ZoomIn"] = "Приблизить", ["ZoomOut"] = "Отдалить", ["CenterOnSector"] = "К центру сектора",
-        ["FocusCommandLine"] = "Командная строка", ["ToggleAircraftList"] = "Весь трафик", ["ToggleMessages"] = "Сообщения",
-        ["ToggleFlightPlan"] = "План полёта", ["ToggleLayers"] = "Слои", ["OpenSettings"] = "Настройки",
-        ["Connect"] = "Подключение", ["TrackSelected"] = "Сопровождать выбранный", ["ClearSelection"] = "Снять выбор",
-        ["ToggleDepartures"] = "Список вылета", ["ToggleArrivals"] = "Список прилёта", ["ToggleConflicts"] = "Конфликты (STCA)",
-        ["ToggleAtc"] = "Диспетчеры", ["OpenSector"] = "Выбор сектора",
-        ["AssumeOrAccept"] = "Взять борт / принять передачу", ["HandoffNext"] = "Передать следующему диспетчеру",
-        ["ReleaseOrRefuse"] = "Отпустить борт / отклонить передачу", ["ToggleRoute"] = "Маршрут выбранного борта",
-        ["ActiveRunways"] = "Активные ВПП", ["ToggleSil"] = "Входящие (SIL)", ["ToggleSel"] = "Выходящие (SEL)",
+        ["ZoomIn"] = "Zoom in", ["ZoomOut"] = "Zoom out", ["CenterOnSector"] = "Center on sector",
+        ["FocusCommandLine"] = "Command line", ["ToggleAircraftList"] = "All traffic", ["ToggleMessages"] = "Messages",
+        ["ToggleFlightPlan"] = "Flight plan", ["ToggleLayers"] = "Layers", ["OpenSettings"] = "Settings",
+        ["Connect"] = "Connect", ["TrackSelected"] = "Assume selected", ["ClearSelection"] = "Clear selection",
+        ["ToggleDepartures"] = "Departure list", ["ToggleArrivals"] = "Arrival list", ["ToggleConflicts"] = "Conflicts (STCA)",
+        ["ToggleAtc"] = "Controllers", ["OpenSector"] = "Sector selection",
+        ["AssumeOrAccept"] = "Assume / accept handoff", ["HandoffNext"] = "Hand off to next controller",
+        ["ReleaseOrRefuse"] = "Release / refuse handoff", ["ToggleRoute"] = "Route of selected aircraft",
+        ["ActiveRunways"] = "Active runways", ["ToggleSil"] = "Incoming (SIL)", ["ToggleSel"] = "Outgoing (SEL)",
     };
 
     private readonly TagFields _fields;
@@ -123,7 +123,7 @@ public partial class SettingsWindow : Window
             $"{(p.Plugin.Author.Length > 0 ? p.Plugin.Author + " · " : "")}{Path.GetFileName(p.File)}")).ToList();
         entries.AddRange(plugins.Errors.Select(e => new PluginEntry("⚠ " + Path.GetFileName(e.File), e.Reason)));
         entries.AddRange(plugins.Registry.Commands.Values.Select(c => new PluginEntry("." + c.Name, $"{c.Description} · {c.Owner}")));
-        if (entries.Count == 0) entries.Add(new PluginEntry("Плагинов нет", "Положите DLL плагина в папку plugins и перезапустите программу."));
+        if (entries.Count == 0) entries.Add(new PluginEntry("No plugins", "Put the plugin DLL into the plugins folder and restart the program."));
         PluginList.ItemsSource = entries;
         Nav.SelectedIndex = 0;
     }
@@ -157,15 +157,15 @@ public partial class SettingsWindow : Window
 
     private void OnImportTheme(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "Тема (*.json)|*.json" };
+        var dialog = new OpenFileDialog { Filter = "Theme (*.json)|*.json" };
         if (dialog.ShowDialog(this) != true) return;
         try { LoadColors(Profile.LoadTheme(dialog.FileName)); }
-        catch (Exception ex) when (ex is IOException or JsonException) { ErrorText.Text = "Не удалось прочитать тему: " + ex.Message; }
+        catch (Exception ex) when (ex is IOException or JsonException) { ErrorText.Text = "Could not read theme: " + ex.Message; }
     }
 
     private void OnExportTheme(object sender, RoutedEventArgs e)
     {
-        var dialog = new SaveFileDialog { Filter = "Тема (*.json)|*.json", FileName = Result.Theme.Name + ".json" };
+        var dialog = new SaveFileDialog { Filter = "Theme (*.json)|*.json", FileName = Result.Theme.Name + ".json" };
         if (dialog.ShowDialog(this) != true) return;
         var theme = BuildTheme();
         if (theme != null) Profile.SaveTheme(theme, dialog.FileName);
@@ -176,7 +176,7 @@ public partial class SettingsWindow : Window
         var bad = _colors.FirstOrDefault(c => !Paint.IsValid(c.Value));
         if (bad != null)
         {
-            ErrorText.Text = $"Неверный цвет {bad.Key}: {bad.Value}. Формат #RRGGBB или #AARRGGBB.";
+            ErrorText.Text = $"Invalid color {bad.Key}: {bad.Value}. Use #RRGGBB or #AARRGGBB.";
             return null;
         }
         var theme = Result.Theme.Clone();
@@ -207,7 +207,7 @@ public partial class SettingsWindow : Window
 
     private void OnBrowseSector(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "Секторы (*.natc;*.sct;*.sct2)|*.natc;*.sct;*.sct2|Все файлы|*.*" };
+        var dialog = new OpenFileDialog { Filter = "Sectors (*.natc;*.sct;*.sct2)|*.natc;*.sct;*.sct2|All files|*.*" };
         if (dialog.ShowDialog(this) != true) return;
         Result.SectorFile = dialog.FileName;
         DataContext = null;
@@ -226,8 +226,8 @@ public partial class SettingsWindow : Window
         ErrorText.Text = "";
         var theme = BuildTheme();
         if (theme == null) { Nav.SelectedIndex = 0; return; }
-        if (Result.Panels.UiScale is < 0.5 or > 3) { ErrorText.Text = "Масштаб интерфейса 0.5–3"; Nav.SelectedIndex = 1; return; }
-        if (Result.Tags.FontSize is < 6 or > 40) { ErrorText.Text = "Размер шрифта тегов 6–40"; Nav.SelectedIndex = 2; return; }
+        if (Result.Panels.UiScale is < 0.5 or > 3) { ErrorText.Text = "UI scale 0.5–3"; Nav.SelectedIndex = 1; return; }
+        if (Result.Tags.FontSize is < 6 or > 40) { ErrorText.Text = "Tag font size 6–40"; Nav.SelectedIndex = 2; return; }
 
         var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in AliasBox.Text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -235,7 +235,7 @@ public partial class SettingsWindow : Window
             int eq = line.IndexOf('=');
             if (eq <= 0 || !line.StartsWith('.'))
             {
-                ErrorText.Text = $"Алиас «{line}»: нужен формат .имя = текст";
+                ErrorText.Text = $"Alias \"{line}\": expected format .name = text";
                 Nav.SelectedIndex = 6;
                 return;
             }
@@ -246,7 +246,7 @@ public partial class SettingsWindow : Window
         {
             if (k.Gesture.Length > 0 && !KeyBindingParser.TryParse(k.Gesture, out _, out _))
             {
-                ErrorText.Text = $"Клавиша для «{k.Title}» не распознана: {k.Gesture}";
+                ErrorText.Text = $"Key for \"{k.Title}\" not recognized: {k.Gesture}";
                 Nav.SelectedIndex = 5;
                 return;
             }
@@ -256,7 +256,7 @@ public partial class SettingsWindow : Window
             .Select(a => a.ToUpperInvariant()).Distinct().ToList();
         if (airports.FirstOrDefault(a => a.Length != 4 || !a.All(char.IsLetterOrDigit)) is { } bad)
         {
-            ErrorText.Text = $"Аэродром «{bad}»: нужен 4-буквенный код ICAO";
+            ErrorText.Text = $"Airport \"{bad}\": a 4-letter ICAO code is required";
             Nav.SelectedIndex = 1;
             return;
         }
@@ -264,7 +264,7 @@ public partial class SettingsWindow : Window
         Result.Theme = theme;
         Result.ActiveAirports = airports;
         Result.ControllerInfo = ControllerInfoBox.Text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
-        if (Result.ClamFeet is < 100 or > 5000) { ErrorText.Text = "CLAM: 100–5000 фт"; Nav.SelectedIndex = 4; return; }
+        if (Result.ClamFeet is < 100 or > 5000) { ErrorText.Text = "CLAM: 100–5000 ft"; Nav.SelectedIndex = 4; return; }
         if (ResetWindowsBox.IsChecked == true) Result.Windows = Profile.DefaultWindows();
         Result.TagClicks = ((IEnumerable<ClickEntry>)ClickList.ItemsSource).ToDictionary(
             c => c.Field, c => new TagClickBinding(c.Left, c.Right), StringComparer.OrdinalIgnoreCase);

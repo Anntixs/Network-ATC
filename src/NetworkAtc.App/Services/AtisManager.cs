@@ -48,16 +48,16 @@ public sealed class AtisManager(
     {
         Running? r;
         lock (_running) _running.TryGetValue(s.Callsign, out r);
-        if (r == null) return "не подключён";
-        if (r.Voice == null) return "в сети, текст";
-        return r.Voice.OnAir ? "в сети, в эфире" : r.Voice.IsConnected ? "в сети, голос готовится" : "в сети, голос отключён";
+        if (r == null) return "not connected";
+        if (r.Voice == null) return "online, text";
+        return r.Voice.OnAir ? "online, on air" : r.Voice.IsConnected ? "online, voice starting" : "online, voice off";
     }
 
     public async Task ConnectAsync(AtisSettings s)
     {
-        if (controller() is not { } ctl) throw new InvalidOperationException("Сначала подключитесь к сети");
-        if (s.Airport.Trim().Length != 4) throw new InvalidOperationException("Укажите аэродром (4 буквы ICAO)");
-        if (!Frequency.TryParse(s.Frequency, out var khz)) throw new InvalidOperationException("Укажите частоту ATIS, например 128.050");
+        if (controller() is not { } ctl) throw new InvalidOperationException("Connect to the network first");
+        if (s.Airport.Trim().Length != 4) throw new InvalidOperationException("Enter the airport (4-letter ICAO)");
+        if (!Frequency.TryParse(s.Frequency, out var khz)) throw new InvalidOperationException("Enter the ATIS frequency, e.g. 128.050");
         if (IsConnected(s)) return;
         var at = airportPosition(s.Airport.ToUpperInvariant()) ?? ctl.Center;
         var station = new AtisStation(s.Callsign, () => service.Text(s));
@@ -66,11 +66,11 @@ public sealed class AtisManager(
             Remove(s.Callsign);
             if (reason.Length > 0) message($"{s.Callsign}: {reason}", true);
         };
-        station.Requested += (_, pilot) => message($"{s.Callsign}: ATIS запросил {pilot}", false);
+        station.Requested += (_, pilot) => message($"{s.Callsign}: ATIS requested by {pilot}", false);
         await station.ConnectAsync(ctl, khz, at);
         var running = new Running(s, station);
         lock (_running) _running[s.Callsign] = running;
-        message($"{s.Callsign} подключён на {Frequency.Format(khz)}", false);
+        message($"{s.Callsign} connected on {Frequency.Format(khz)}", false);
         Changed?.Invoke();
 
         if (s.Voice == AtisVoiceMode.None) return;
@@ -78,7 +78,7 @@ public sealed class AtisManager(
         voice.Closed += reason =>
         {
             running.Voice = null;
-            if (reason.Length > 0) message($"{s.Callsign}: голос отключён: {reason}", true);
+            if (reason.Length > 0) message($"{s.Callsign}: voice off: {reason}", true);
             Changed?.Invoke();
         };
         try
@@ -91,7 +91,7 @@ public sealed class AtisManager(
         catch (Exception ex) when (ex is VoiceException or System.Net.Sockets.SocketException or OperationCanceledException)
         {
             voice.Dispose();
-            message($"{s.Callsign}: голосовой сервер недоступен ({ex.Message}), ATIS работает текстом", true);
+            message($"{s.Callsign}: voice server unavailable ({ex.Message}), ATIS is text-only", true);
         }
         Changed?.Invoke();
     }
@@ -106,7 +106,7 @@ public sealed class AtisManager(
         if (s.Voice == AtisVoiceMode.Recording)
         {
             var samples = AtisAudio.LoadWav(s.RecordingFile);
-            if (samples.Length == 0) message($"{s.Callsign}: нет записи ATIS — запишите её в окне ATIS", true);
+            if (samples.Length == 0) message($"{s.Callsign}: no ATIS recording; record one in the ATIS window", true);
             voice.SetRecording(samples);
             return;
         }
@@ -120,10 +120,10 @@ public sealed class AtisManager(
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                message($"{s.Callsign}: синтез речи не удался: {ex.Message}", true);
+                message($"{s.Callsign}: speech synthesis failed: {ex.Message}", true);
                 return;
             }
-            if (samples.Length == 0) message($"{s.Callsign}: в Windows нет голоса для языка «{s.Language}»", true);
+            if (samples.Length == 0) message($"{s.Callsign}: Windows has no voice for language \"{s.Language}\"", true);
             // Only the newest version goes on the air.
             if (version == Volatile.Read(ref r.Version)) voice.SetRecording(samples);
             Changed?.Invoke();
@@ -147,7 +147,7 @@ public sealed class AtisManager(
         r.Voice = null;
         await r.Fsd.DisconnectAsync();
         Remove(s.Callsign);
-        message($"{s.Callsign} отключён", false);
+        message($"{s.Callsign} disconnected", false);
     }
 
     public async Task DisconnectAllAsync()

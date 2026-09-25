@@ -31,7 +31,7 @@ public partial class RunwaysWindow : Window
             .ThenBy(a => a)
             .ToList();
         if (airports.Count == 0)
-            Body.Children.Add(new TextBlock { Text = "В секторе нет ВПП. Аэродромы можно задать командой .airport UUEE", Style = (Style)FindResource("Muted") });
+            Body.Children.Add(new TextBlock { Text = "No runways in the sector. Set airports with the .airport UUEE command", Style = (Style)FindResource("Muted") });
         foreach (var icao in airports) AddAirport(icao, sector);
     }
 
@@ -65,8 +65,8 @@ public partial class RunwaysWindow : Window
             grid.RowDefinitions.Add(new RowDefinition());
             var id = ends[i];
             var name = new TextBlock { Text = id, FontFamily = (System.Windows.Media.FontFamily)FindResource("MonoFont"), VerticalAlignment = VerticalAlignment.Center };
-            var dep = new CheckBox { Content = "вылет", IsChecked = use.Departure.Contains(id, StringComparer.OrdinalIgnoreCase) };
-            var arr = new CheckBox { Content = "посадка", IsChecked = use.Arrival.Contains(id, StringComparer.OrdinalIgnoreCase) };
+            var dep = new CheckBox { Content = "departure", IsChecked = use.Departure.Contains(id, StringComparer.OrdinalIgnoreCase) };
+            var arr = new CheckBox { Content = "arrival", IsChecked = use.Arrival.Contains(id, StringComparer.OrdinalIgnoreCase) };
             // Choosing a runway makes the airport active.
             dep.Checked += (_, _) => active.IsChecked = true;
             arr.Checked += (_, _) => active.IsChecked = true;

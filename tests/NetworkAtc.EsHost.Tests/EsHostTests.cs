@@ -167,7 +167,7 @@ public class EsHostTests
         bridge.CloseView(EsBridge.MainView);
         bridge.UnloadPlugin(bridge.Plugins.Single().Id);
         await Until(() => bridge.Plugins.Count == 0, "plugin unloaded");
-        lock (logs) Assert.DoesNotContain(logs, l => l.Contains("ошибка"));
+        lock (logs) Assert.DoesNotContain(logs, l => l.Contains("error"));
         File.Delete(settings);
     }
 }

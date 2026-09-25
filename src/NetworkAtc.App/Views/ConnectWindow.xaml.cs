@@ -18,7 +18,7 @@ public partial class ConnectWindow : Window
     private static readonly string[] RatingNames = ["OBS", "S1", "S2", "S3", "C1", "C2", "C3", "I1", "I2", "I3", "SUP", "ADM"];
     private static readonly (Facility Value, string Title)[] Facilities =
     [
-        (Facility.Observer, "Наблюдатель"), (Facility.Delivery, "DEL"), (Facility.Ground, "GND"), (Facility.Tower, "TWR"),
+        (Facility.Observer, "Observer"), (Facility.Delivery, "DEL"), (Facility.Ground, "GND"), (Facility.Tower, "TWR"),
         (Facility.Approach, "APP/DEP"), (Facility.Centre, "CTR"), (Facility.FlightService, "FSS"),
     ];
 
@@ -66,17 +66,17 @@ public partial class ConnectWindow : Window
     private void OnOk(object sender, RoutedEventArgs e)
     {
         string callsign = CallsignBox.Text.Trim().ToUpperInvariant();
-        if (!AtcSession.IsValidCallsign(callsign)) { ErrorText.Text = "Позывной: 2–12 латинских букв, цифр и _"; return; }
-        if (!Frequency.TryParse(FrequencyBox.Text, out var khz)) { ErrorText.Text = "Частота 118.000–136.975"; return; }
-        if (!int.TryParse(RangeBox.Text, out var range) || range is < 1 or > 600) { ErrorText.Text = "Дальность 1–600 NM"; return; }
+        if (!AtcSession.IsValidCallsign(callsign)) { ErrorText.Text = "Callsign: 2–12 Latin letters, digits and _"; return; }
+        if (!Frequency.TryParse(FrequencyBox.Text, out var khz)) { ErrorText.Text = "Frequency 118.000–136.975"; return; }
+        if (!int.TryParse(RangeBox.Text, out var range) || range is < 1 or > 600) { ErrorText.Text = "Range 1–600 NM"; return; }
         var server = ServerBox.Text.Trim().Split(':');
         int port = 6809;
         if (server[0].Length == 0 || server.Length > 2 || server.Length == 2 && !int.TryParse(server[1], out port))
         {
-            ErrorText.Text = "Сервер: хост или хост:порт";
+            ErrorText.Text = "Server: host or host:port";
             return;
         }
-        if (!int.TryParse(CidBox.Text.Trim(), out var cid) || cid <= 0) { ErrorText.Text = "Укажите CID"; return; }
+        if (!int.TryParse(CidBox.Text.Trim(), out var cid) || cid <= 0) { ErrorText.Text = "Enter your CID"; return; }
 
         var st = _profile.Station;
         st.Callsign = callsign;

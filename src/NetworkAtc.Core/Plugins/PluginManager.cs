@@ -44,7 +44,7 @@ public sealed class PluginManager(AtcSession session, TagFields fields, PluginRe
             {
                 // Native DLLs (e.g. EuroScope plugins) and broken assemblies end up here.
                 _errors.Add(new PluginLoadError(file, e is BadImageFormatException
-                    ? "не .NET-сборка (плагины EuroScope не поддерживаются, см. README)"
+                    ? "not a .NET assembly (EuroScope plugins are not supported here, see README)"
                     : e.Message));
             }
         }
@@ -63,7 +63,7 @@ public sealed class PluginManager(AtcSession session, TagFields fields, PluginRe
         }
         catch (Exception e)
         {
-            _errors.Add(new PluginLoadError(file.Length > 0 ? file : plugin.Name, "ошибка инициализации: " + e.Message));
+            _errors.Add(new PluginLoadError(file.Length > 0 ? file : plugin.Name, "initialization error: " + e.Message));
         }
     }
 

@@ -1,15 +1,15 @@
 <Window x:Class="NetworkAtc.App.Views.VoiceWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Голосовая связь" Width="560" Height="720" MinHeight="420"
+        Title="Voice" Width="560" Height="720" MinHeight="420"
         WindowStartupLocation="CenterOwner" Style="{StaticResource AtcWindow}">
   <DockPanel Margin="22,16,22,18">
     <StackPanel DockPanel.Dock="Top">
-      <TextBlock Text="Голосовая связь" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Text="Voice" FontSize="20" FontWeight="SemiBold"/>
       <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
-                 Text="Голос подключается вместе с сетью с тем же CID, паролем и позывным. Антенны стоят в центре видимости."/>
+                 Text="Voice connects together with the network using the same CID, password and callsign. Transceivers are placed at the visibility center."/>
       <DockPanel Margin="0,10,0,0">
-        <Button x:Name="ReconnectButton" DockPanel.Dock="Right" Content="Переподключить" Click="OnReconnect"/>
+        <Button x:Name="ReconnectButton" DockPanel.Dock="Right" Content="Reconnect" Click="OnReconnect"/>
         <Ellipse x:Name="StateDot" Width="8" Height="8" Fill="{DynamicResource MutedBrush}" Margin="0,0,8,0"/>
         <TextBlock x:Name="StateText" TextWrapping="Wrap"/>
       </DockPanel>
@@ -18,22 +18,22 @@
     <StackPanel DockPanel.Dock="Bottom">
       <TextBlock x:Name="ErrorText" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,10,0,0"/>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-        <Button Content="Отмена" IsCancel="True" Margin="0,0,8,0"/>
-        <Button Content="Применить" IsDefault="True" Style="{StaticResource Primary}" Click="OnOk"/>
+        <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0"/>
+        <Button Content="Apply" IsDefault="True" Style="{StaticResource Primary}" Click="OnOk"/>
       </StackPanel>
     </StackPanel>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel Margin="0,0,6,0">
-        <TextBlock Text="ЧАСТОТЫ" Style="{StaticResource SectionTitle}"/>
+        <TextBlock Text="FREQUENCIES" Style="{StaticResource SectionTitle}"/>
         <Grid Margin="0,0,0,4">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="120"/><ColumnDefinition Width="46"/><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/>
           </Grid.ColumnDefinitions>
-          <TextBlock Text="ЧАСТОТА" Style="{StaticResource ColumnHeader}"/>
-          <TextBlock Grid.Column="1" Text="RX" Style="{StaticResource ColumnHeader}" ToolTip="Приём"/>
-          <TextBlock Grid.Column="2" Text="TX" Style="{StaticResource ColumnHeader}" ToolTip="Передача"/>
-          <TextBlock Grid.Column="3" Text="ГРОМКОСТЬ" Style="{StaticResource ColumnHeader}"/>
+          <TextBlock Text="FREQUENCY" Style="{StaticResource ColumnHeader}"/>
+          <TextBlock Grid.Column="1" Text="RX" Style="{StaticResource ColumnHeader}" ToolTip="Receive"/>
+          <TextBlock Grid.Column="2" Text="TX" Style="{StaticResource ColumnHeader}" ToolTip="Transmit"/>
+          <TextBlock Grid.Column="3" Text="VOLUME" Style="{StaticResource ColumnHeader}"/>
         </Grid>
         <Grid Margin="0,2">
           <Grid.ColumnDefinitions>
@@ -41,7 +41,7 @@
           </Grid.ColumnDefinitions>
           <StackPanel Orientation="Horizontal">
             <TextBlock x:Name="PrimaryText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold"/>
-            <TextBlock Text="основная" Style="{StaticResource Muted}" FontSize="10.5" Margin="6,0,0,0"/>
+            <TextBlock Text="primary" Style="{StaticResource Muted}" FontSize="10.5" Margin="6,0,0,0"/>
           </StackPanel>
           <CheckBox x:Name="PrimaryRx" Grid.Column="1"/>
           <CheckBox x:Name="PrimaryTx" Grid.Column="2"/>
@@ -49,24 +49,24 @@
         </Grid>
         <StackPanel x:Name="FrequencyRows"/>
         <DockPanel Margin="0,6,0,0">
-          <Button x:Name="AddButton" DockPanel.Dock="Left" Content="+ Добавить частоту" Click="OnAddFrequency"/>
+          <Button x:Name="AddButton" DockPanel.Dock="Left" Content="+ Add frequency" Click="OnAddFrequency"/>
           <TextBlock x:Name="ObserverText" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="10,0,0,0"/>
         </DockPanel>
 
-        <TextBlock Text="ТАНГЕНТА" Style="{StaticResource SectionTitle}"/>
+        <TextBlock Text="PUSH-TO-TALK" Style="{StaticResource SectionTitle}"/>
         <DockPanel>
-          <Button x:Name="ClearPttButton" DockPanel.Dock="Right" Content="Сбросить" Click="OnClearPtt"/>
-          <Button x:Name="CapturePttButton" DockPanel.Dock="Right" Content="Назначить…" Click="OnCapturePtt"/>
+          <Button x:Name="ClearPttButton" DockPanel.Dock="Right" Content="Clear" Click="OnClearPtt"/>
+          <Button x:Name="CapturePttButton" DockPanel.Dock="Right" Content="Assign…" Click="OnCapturePtt"/>
           <TextBlock x:Name="PttText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold"/>
         </DockPanel>
         <TextBlock x:Name="PttHint" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"
-                   Text="Клавиша, кнопка мыши или кнопка джойстика; работает и когда окно не в фокусе. В строке состояния есть кнопка PTT — держите её, чтобы говорить."/>
+                   Text="A key, mouse button or joystick button; works even when the window is not focused. The status bar has a PTT button — hold it to talk."/>
         <TextBlock x:Name="PttWarning" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
 
-        <TextBlock Text="АУДИО" Style="{StaticResource SectionTitle}"/>
-        <TextBlock Text="Микрофон" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+        <TextBlock Text="AUDIO" Style="{StaticResource SectionTitle}"/>
+        <TextBlock Text="Microphone" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
         <ComboBox x:Name="InputBox" DisplayMemberPath="Title"/>
-        <TextBlock Text="Динамики / наушники" Style="{StaticResource FieldLabel}"/>
+        <TextBlock Text="Speakers / headphones" Style="{StaticResource FieldLabel}"/>
         <ComboBox x:Name="OutputBox" DisplayMemberPath="Title"/>
         <Grid Margin="0,4,0,0">
           <Grid.ColumnDefinitions>
@@ -75,29 +75,29 @@
           <StackPanel>
             <DockPanel>
               <TextBlock x:Name="MicGainText" DockPanel.Dock="Right" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,8,0,3"/>
-              <TextBlock Text="Усиление микрофона" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Microphone gain" Style="{StaticResource FieldLabel}"/>
             </DockPanel>
             <Slider x:Name="MicGainSlider" Minimum="0" Maximum="4" ValueChanged="OnSliderChanged"/>
           </StackPanel>
           <StackPanel Grid.Column="2">
             <DockPanel>
               <TextBlock x:Name="OutputVolumeText" DockPanel.Dock="Right" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,8,0,3"/>
-              <TextBlock Text="Громкость приёма" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Receive volume" Style="{StaticResource FieldLabel}"/>
             </DockPanel>
             <Slider x:Name="OutputVolumeSlider" Minimum="0" Maximum="2" ValueChanged="OnSliderChanged"/>
           </StackPanel>
         </Grid>
-        <TextBlock Text="Уровень микрофона (при подключении)" Style="{StaticResource FieldLabel}"/>
+        <TextBlock Text="Microphone level (when connected)" Style="{StaticResource FieldLabel}"/>
         <Border x:Name="MicMeter" Height="6" CornerRadius="3" Background="{DynamicResource HoverBrush}">
           <Border x:Name="MicLevelBar" HorizontalAlignment="Left" Width="0" CornerRadius="3" Background="{DynamicResource SuccessBrush}"/>
         </Border>
 
-        <TextBlock Text="СЕРВЕР" Style="{StaticResource SectionTitle}"/>
-        <CheckBox x:Name="EnabledBox" Content="Подключать голосовую связь вместе с сетью"/>
+        <TextBlock Text="SERVER" Style="{StaticResource SectionTitle}"/>
+        <CheckBox x:Name="EnabledBox" Content="Connect voice together with the network"/>
         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-          <TextBlock Text="Порт голосового сервера" Style="{StaticResource Muted}" Margin="0,0,10,0"/>
+          <TextBlock Text="Voice server port" Style="{StaticResource Muted}" Margin="0,0,10,0"/>
           <TextBox x:Name="PortBox" Width="80" FontFamily="{StaticResource MonoFont}"/>
-          <TextBlock Style="{StaticResource Muted}" Margin="10,0,0,0" Text="хост — тот же, что у сервера сети"/>
+          <TextBlock Style="{StaticResource Muted}" Margin="10,0,0,0" Text="host is the same as the network server"/>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

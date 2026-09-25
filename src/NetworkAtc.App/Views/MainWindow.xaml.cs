@@ -61,19 +61,19 @@ public partial class MainWindow : Window
 {
     private static readonly (string Key, string Title)[] MapLayers =
     [
-        ("ARTCC", "Границы (ARTCC)"), ("ARTCC HIGH", "Границы верхние"), ("ARTCC LOW", "Границы нижние"),
-        ("SECTORLINES", "Линии секторов (.ese)"), ("SID", "SID"), ("STAR", "STAR"), ("LOW AIRWAY", "Нижние трассы"),
-        ("HIGH AIRWAY", "Верхние трассы"), ("GEO", "Геометрия (GEO)"), ("REGIONS", "Регионы"), ("RUNWAYS", "ВПП"),
-        ("AIRPORTS", "Аэродромы"), ("VOR", "VOR"), ("NDB", "NDB"), ("FIXES", "Точки"), ("FIX NAMES", "Имена точек"),
-        ("LABELS", "Подписи"), ("FREETEXT", "Текст (.ese)"), ("RANGE RINGS", "Кольца дальности"),
-        ("CENTERLINES", "Продолжения осей ВПП"),
+        ("ARTCC", "Boundaries (ARTCC)"), ("ARTCC HIGH", "Upper boundaries"), ("ARTCC LOW", "Lower boundaries"),
+        ("SECTORLINES", "Sector lines (.ese)"), ("SID", "SID"), ("STAR", "STAR"), ("LOW AIRWAY", "Low airways"),
+        ("HIGH AIRWAY", "High airways"), ("GEO", "Geography (GEO)"), ("REGIONS", "Regions"), ("RUNWAYS", "Runways"),
+        ("AIRPORTS", "Airports"), ("VOR", "VOR"), ("NDB", "NDB"), ("FIXES", "Fixes"), ("FIX NAMES", "Fix names"),
+        ("LABELS", "Labels"), ("FREETEXT", "Free text (.ese)"), ("RANGE RINGS", "Range rings"),
+        ("CENTERLINES", "Runway centerlines"),
     ];
 
     private static readonly (string Id, string Title)[] ListWindows =
     [
-        ("departures", "Вылет"), ("arrivals", "Прилёт"), ("traffic", "Весь трафик"), ("flightplan", "План полёта"),
-        ("atc", "Диспетчеры"), ("conflicts", "Конфликты (STCA)"), ("messages", "Сообщения"),
-        ("sil", "Входящие (SIL)"), ("sel", "Выходящие (SEL)"),
+        ("departures", "Departures"), ("arrivals", "Arrivals"), ("traffic", "All traffic"), ("flightplan", "Flight plan"),
+        ("atc", "Controllers"), ("conflicts", "Conflicts (STCA)"), ("messages", "Messages"),
+        ("sil", "Incoming (SIL)"), ("sel", "Outgoing (SEL)"),
     ];
 
     private readonly string _profilePath;
@@ -100,7 +100,7 @@ public partial class MainWindow : Window
     private readonly List<string> _history = [];
     private Profile _profile;
     private string? _sectorPath;
-    private string _activeChat = "Радио";
+    private string _activeChat = "Radio";
     private int _historyIndex;
     private bool _dirty = true;
     private int _frameCount;
@@ -154,7 +154,7 @@ public partial class MainWindow : Window
         });
         _session.ControllersChanged += (_, _) => Dispatcher.BeginInvoke(RefreshControllers);
         _session.ConnectionChanged += (_, c) => Dispatcher.BeginInvoke(() => UpdateConnectionState(c));
-        _registry.Log += (_, text) => Dispatcher.BeginInvoke(() => AddLine("Радио", "плагин", text, _profile.Theme.MutedText));
+        _registry.Log += (_, text) => Dispatcher.BeginInvoke(() => AddLine("Radio", "plugin", text, _profile.Theme.MutedText));
         _registry.Changed += (_, _) => Dispatcher.BeginInvoke(BuildLayerList);
         _commands.CenterRequested += (_, p) => Radar.CenterOn(p);
         _commands.SelectRequested += (_, t) => Radar.Select(t);
@@ -177,7 +177,7 @@ public partial class MainWindow : Window
         _workspace.Weather.Enabled = _profile.FetchMetar;
         _workspace.Weather.Start();
 
-        OpenChat("Радио");
+        OpenChat("Radio");
         ApplyProfile();
         LoadSector(sectorPath);
         LoadPlugins();
@@ -191,7 +191,7 @@ public partial class MainWindow : Window
         PreviewKeyDown += OnPreviewKeyDown;
         Closing += OnClosing;
         RefreshWeather();
-        Info("Network-ATC готов. .help — команды · .demo — демо-трафик · ВПП — аэродромы и ВПП · F12 — взять/принять борт · правая кнопка с протяжкой — измерить расстояние");
+        Info("Network-ATC ready. .help: commands · .demo: demo traffic · RWY: airports and runways · F12: assume/accept · right-drag: measure distance");
     }
 
     // ---- setup ---------------------------------------------------------------------------------
@@ -262,11 +262,11 @@ public partial class MainWindow : Window
             Title = $"Network-ATC — {sector.Name}";
             BuildLayerList();
             if (sector.Warnings.Count > 0)
-                Info($"Сектор загружен с предупреждениями ({sector.Warnings.Count}): {string.Join("; ", sector.Warnings.Take(3))}");
+                Info($"Sector loaded with warnings ({sector.Warnings.Count}): {string.Join("; ", sector.Warnings.Take(3))}");
         }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException)
         {
-            Error("Не удалось открыть сектор: " + e.Message);
+            Error("Could not open sector: " + e.Message);
         }
     }
 
@@ -274,15 +274,15 @@ public partial class MainWindow : Window
     {
         _plugins.LoadFrom(PluginFolder);
         _plugins.LoadFrom(Path.Combine(AppContext.BaseDirectory, "plugins"));
-        foreach (var p in _plugins.Plugins) Info($"Плагин: {p.Plugin.Name} {p.Plugin.Version}");
-        foreach (var e in _plugins.Errors) Error($"Плагин {Path.GetFileName(e.File)}: {e.Reason}");
+        foreach (var p in _plugins.Plugins) Info($"Plugin: {p.Plugin.Name} {p.Plugin.Version}");
+        foreach (var e in _plugins.Errors) Error($"Plugin {Path.GetFileName(e.File)}: {e.Reason}");
     }
 
     private void BuildLayerList()
     {
         var items = MapLayers.Select(l => new LayerItem(l.Key, l.Title, _profile.IsLayerVisible(l.Key))).ToList();
         if (Radar.Sector is { } s)
-            items.AddRange(s.CustomLayers.Select(l => new LayerItem(l, l + " · карта", _profile.IsLayerVisible(l))));
+            items.AddRange(s.CustomLayers.Select(l => new LayerItem(l, l + " · map", _profile.IsLayerVisible(l))));
         lock (_registry.Overlays)
             items.AddRange(_registry.Overlays.Select(o => new LayerItem("plugin:" + o.Overlay.Name, o.Overlay.Name + " · " + o.Owner,
                 _profile.IsLayerVisible("plugin:" + o.Overlay.Name))));
@@ -325,7 +325,7 @@ public partial class MainWindow : Window
             menu.Items.Add(item);
         }
         menu.Items.Add(new Separator());
-        var reset = new MenuItem { Header = "    Расставить окна по умолчанию" };
+        var reset = new MenuItem { Header = "    Reset window layout" };
         reset.Click += (_, _) =>
         {
             _profile.Windows = Profile.DefaultWindows();
@@ -366,9 +366,9 @@ public partial class MainWindow : Window
     {
         var tracks = _session.Tracks.Where(t => t.LastUpdate != default).ToList();
         var airports = _profile.ActiveAirports;
-        string codes = airports.Count > 0 ? string.Join(" ", airports) : "задайте .airport";
-        DeparturesWindow.Header = $"ВЫЛЕТ · {codes}";
-        ArrivalsWindow.Header = $"ПРИЛЁТ · {codes}";
+        string codes = airports.Count > 0 ? string.Join(" ", airports) : "set .airport";
+        DeparturesWindow.Header = $"DEPARTURES · {codes}";
+        ArrivalsWindow.Header = $"ARRIVALS · {codes}";
 
         Update(TrafficList, tracks.OrderBy(t => t.Callsign)
             .Select(t => new TrafficRow(t.Callsign, _tagFields.FlightLevel(t.Altitude),
@@ -385,13 +385,13 @@ public partial class MainWindow : Window
                 a.EtaMinutes is { } m ? DateTime.UtcNow.AddMinutes(m).ToString("HH:mm") : "")).ToList());
         var sil = _workspace.InboundList(_tagFields.FlightLevel).ToList();
         Update(SilList, sil);
-        SilWindow.Header = $"ВХОДЯЩИЕ (SIL) · {sil.Count}";
+        SilWindow.Header = $"INCOMING (SIL) · {sil.Count}";
         var sel = _workspace.OutboundList(_tagFields.FlightLevel).ToList();
         Update(SelList, sel);
-        SelWindow.Header = $"ВЫХОДЯЩИЕ (SEL) · {sel.Count}";
+        SelWindow.Header = $"OUTGOING (SEL) · {sel.Count}";
         Update(ConflictList, Radar.Conflicts.Select(c => new ConflictView(c.A, $"{c.A.Callsign} / {c.B.Callsign}",
             $"{c.DistanceNm:0.0} NM {c.VerticalFeet} ft{(c.Predicted ? " ▸" : "")}")).ToList());
-        ConflictsWindow.Header = $"КОНФЛИКТЫ (STCA) · {Radar.Conflicts.Count}";
+        ConflictsWindow.Header = $"CONFLICTS (STCA) · {Radar.Conflicts.Count}";
         if (Radar.Conflicts.Count > 0 && ConflictsWindow.Visibility != Visibility.Visible && _profile.StcaEnabled)
             ShowWindow("conflicts", true);
     }
@@ -462,7 +462,7 @@ public partial class MainWindow : Window
         {
             var m = _workspace.Weather.Get(icao);
             return new WeatherView(icao, _profile.AtisLetters.GetValueOrDefault(icao, ""),
-                m == null ? "—" : $"{m.Wind} Q{m.Qnh?.ToString() ?? "—"}", m?.Raw ?? "METAR ещё не получен");
+                m == null ? "—" : $"{m.Wind} Q{m.Qnh?.ToString() ?? "—"}", m?.Raw ?? "METAR not received yet");
         }).ToList();
     }
 
@@ -525,10 +525,10 @@ public partial class MainWindow : Window
         Radar.Sector?.Runways.Where(r => r.Airport.Equals(airport, StringComparison.OrdinalIgnoreCase))
             .SelectMany(r => new[] { r.Id1, r.Id2 }).Distinct().Order() ?? Enumerable.Empty<string>();
 
-    /// <summary>Items: "авто (X)" for the automatic choice, then the values; selects the assigned one.</summary>
+    /// <summary>Items: "auto (X)" for the automatic choice, then the values; selects the assigned one.</summary>
     private static void FillCombo(ComboBox box, IEnumerable<string> values, string assigned, string? effective)
     {
-        var items = new List<ComboBoxItem> { new() { Content = $"авто{(effective != null && assigned.Length == 0 ? $" ({effective})" : "")}", Tag = "" } };
+        var items = new List<ComboBoxItem> { new() { Content = $"auto{(effective != null && assigned.Length == 0 ? $" ({effective})" : "")}", Tag = "" } };
         items.AddRange(values.Distinct().Select(v => new ComboBoxItem { Content = v, Tag = v }));
         if (assigned.Length > 0 && items.All(i => (string)i.Tag != assigned)) items.Add(new ComboBoxItem { Content = assigned, Tag = assigned });
         box.ItemsSource = items;
@@ -538,9 +538,9 @@ public partial class MainWindow : Window
     private void ShowPlanSummary(Track t)
     {
         var state = _workspace.StateOf(t);
-        PlanSubtitle.Text = $"{(t.AircraftType.Length > 0 ? t.AircraftType : "тип ?")}/{t.WakeCategory}   код {t.Squawk:0000}{(t.ModeC ? "" : " STBY")}" +
+        PlanSubtitle.Text = $"{(t.AircraftType.Length > 0 ? t.AircraftType : "type ?")}/{t.WakeCategory}   sqk {t.Squawk:0000}{(t.ModeC ? "" : " STBY")}" +
                             (t.CommType.Length > 0 ? $"   /{t.CommType.ToLowerInvariant()}" : "");
-        PlanRoute.Text = t.HasFlightPlan ? $"{t.Departure}  →  {t.Destination}" : "Нет плана полёта";
+        PlanRoute.Text = t.HasFlightPlan ? $"{t.Departure}  →  {t.Destination}" : "No flight plan";
         OwnerText.Text = TrackStates.Title(state) + (t.Owner.Length > 0 && !t.IsTracked ? $" · {t.Owner}" : "");
         string warn = Warnings.Text(t, _workspace.WarningOf(t));
         PlanDetails.Text = $"{_tagFields.FlightLevel(t.Altitude)}  {t.GroundSpeed} kt  {t.Heading:000}°  {t.VerticalSpeed:+0;-0;0} ft/min" +
@@ -560,25 +560,25 @@ public partial class MainWindow : Window
         switch (_workspace.StateOf(t))
         {
             case TrackState.TransferToMe:
-                Add($"Принять от {t.HandoffFrom}", () => Coord(() => _session.AcceptHandoffAsync(t)), primary: true);
-                Add("Отклонить", () => Coord(() => _session.RefuseHandoffAsync(t)));
+                Add($"Accept from {t.HandoffFrom}", () => Coord(() => _session.AcceptHandoffAsync(t)), primary: true);
+                Add("Refuse", () => Coord(() => _session.RefuseHandoffAsync(t)));
                 break;
             case TrackState.TransferFromMe:
-                Add($"Отменить передачу {t.HandoffTo}", () => Coord(() => _session.CancelHandoffAsync(t)));
+                Add($"Cancel handoff to {t.HandoffTo}", () => Coord(() => _session.CancelHandoffAsync(t)));
                 break;
             case TrackState.Assumed:
                 if (_workspace.NextController(t) is { } next)
-                    Add($"Передать {_workspace.ShortName(next)}", () => Coord(() => _session.HandoffAsync(t, next)), primary: true);
-                Add("Передать…", () => ShowControllerMenu(t, cs => Coord(() => _session.HandoffAsync(t, cs))));
-                Add("Отпустить", () => Coord(() => _session.ReleaseAsync(t)));
+                    Add($"Hand off to {_workspace.ShortName(next)}", () => Coord(() => _session.HandoffAsync(t, next)), primary: true);
+                Add("Hand off…", () => ShowControllerMenu(t, cs => Coord(() => _session.HandoffAsync(t, cs))));
+                Add("Release", () => Coord(() => _session.ReleaseAsync(t)));
                 break;
             case TrackState.Redundant:
                 break;
             default:
-                Add("Взять", () => Coord(() => _session.AssumeAsync(t)), primary: true);
+                Add("Assume", () => Coord(() => _session.AssumeAsync(t)), primary: true);
                 break;
         }
-        Add(t.ShowRoute ? "Скрыть маршрут" : "Маршрут", () => { t.ShowRoute = !t.ShowRoute; _dirty = true; BuildCoordinationButtons(t); });
+        Add(t.ShowRoute ? "Hide route" : "Route", () => { t.ShowRoute = !t.ShowRoute; _dirty = true; BuildCoordinationButtons(t); });
     }
 
     /// <summary>Runs a coordination action and reports its refusal reason, if any.</summary>
@@ -599,7 +599,7 @@ public partial class MainWindow : Window
     private void AssumeOrRelease(Track t) => Coord(() => t.IsTracked ? _session.ReleaseAsync(t) : _session.AssumeAsync(t));
 
     /// <summary>Menu of the controllers online, the next one by sector first.</summary>
-    private void ShowControllerMenu(Track t, Action<string> pick, string title = "Передать")
+    private void ShowControllerMenu(Track t, Action<string> pick, string title = "Hand off")
     {
         var menu = new ContextMenu();
         menu.Items.Add(new MenuItem { Header = title, IsEnabled = false });
@@ -623,7 +623,7 @@ public partial class MainWindow : Window
             mi.Click += (_, _) => pick(cs);
             items.Add(mi);
         }
-        if (online.Count == 0) items.Add(new MenuItem { Header = "нет диспетчеров в сети (передать: .ho ПОЗЫВНОЙ)", IsEnabled = false });
+        if (online.Count == 0) items.Add(new MenuItem { Header = "no controllers online (hand off: .ho CALLSIGN)", IsEnabled = false });
         return items;
     }
 
@@ -657,7 +657,7 @@ public partial class MainWindow : Window
         if (Radar.Selected is not { } t) return;
         if (!int.TryParse(FpTas.Text.Trim(), out var tas) || tas is < 0 or > 9999)
         {
-            Error("TAS — число узлов");
+            Error("TAS must be a number of knots");
             return;
         }
         var old = t.Plan;
@@ -668,7 +668,7 @@ public partial class MainWindow : Window
         try
         {
             await _session.AmendFlightPlanAsync(t, plan);
-            Info($"План полёта {t.Callsign} изменён" + (_session.IsConnected ? " и отправлен" : " (локально)"));
+            Info($"Flight plan {t.Callsign} amended" + (_session.IsConnected ? " and sent" : " (locally)"));
         }
         catch (InvalidOperationException ex)
         {
@@ -694,23 +694,23 @@ public partial class MainWindow : Window
         switch (e.Kind)
         {
             case CoordinationKind.HandoffRequested:
-                Info($"{e.Peer} передаёт вам {t.Callsign} — F12 принять, Ctrl+D отклонить");
+                Info($"{e.Peer} is handing off {t.Callsign} to you — F12 accept, Ctrl+D refuse");
                 _sounds.Play(SoundEvent.HandoffRequest);
                 if (SilWindow.Visibility != Visibility.Visible) ShowWindow("sil", true);
                 break;
             case CoordinationKind.HandoffAccepted:
-                Info($"{e.Peer} принял {t.Callsign}");
+                Info($"{e.Peer} accepted {t.Callsign}");
                 _sounds.Play(SoundEvent.HandoffAccepted);
                 break;
             case CoordinationKind.HandoffRefused:
-                Error($"{e.Peer} отклонил передачу {t.Callsign}");
+                Error($"{e.Peer} refused handoff of {t.Callsign}");
                 _sounds.Play(SoundEvent.HandoffRefused);
                 break;
             case CoordinationKind.HandoffCancelled:
-                Info($"{e.Peer} отменил передачу {t.Callsign}");
+                Info($"{e.Peer} cancelled handoff of {t.Callsign}");
                 break;
             case CoordinationKind.PointOut:
-                Info($"{e.Peer} показывает вам {t.Callsign}");
+                Info($"{e.Peer} points out {t.Callsign} to you");
                 _sounds.Play(SoundEvent.PointOut);
                 break;
         }
@@ -789,9 +789,9 @@ public partial class MainWindow : Window
             {
                 var levels = TagMenus.Levels(t.Altitude, t.ClearedAltitude, _profile.TransitionAltitude);
                 var items = levels.Select(v => new EditorItem(_tagFields.FlightLevel(v), _tagFields.FlightLevel(v), v == t.ClearedAltitude)).ToList();
-                items.Add(new EditorItem("снять", ""));
+                items.Add(new EditorItem("clear", ""));
                 int index = TagMenus.NearestIndex(levels, t.ClearedAltitude ?? t.Altitude);
-                TagEditor.Show(Radar, e.Position, $"CFL · {t.Callsign}", items, index, "", "350, F350 или A045",
+                TagEditor.Show(Radar, e.Position, $"CFL · {t.Callsign}", items, index, "", "350, F350 or A045",
                     v => Annotate(t, $".cfl {v}"));
                 break;
             }
@@ -799,8 +799,8 @@ public partial class MainWindow : Window
             {
                 var headings = TagMenus.Headings(t.AssignedHeading ?? t.Heading);
                 var items = headings.Select(h => new EditorItem(h.ToString("000"), h.ToString(), h == t.AssignedHeading)).ToList();
-                items.Insert(0, new EditorItem("снять", ""));
-                TagEditor.Show(Radar, e.Position, $"Курс · {t.Callsign}", items, 1, "", "1–360",
+                items.Insert(0, new EditorItem("clear", ""));
+                TagEditor.Show(Radar, e.Position, $"Heading · {t.Callsign}", items, 1, "", "1–360",
                     v => Annotate(t, $".hdg {v}"));
                 break;
             }
@@ -808,21 +808,21 @@ public partial class MainWindow : Window
             {
                 var speeds = TagMenus.Speeds();
                 var items = speeds.Select(v => new EditorItem(v.ToString(), v.ToString(), v == t.AssignedSpeed)).ToList();
-                items.Add(new EditorItem("снять", ""));
-                TagEditor.Show(Radar, e.Position, $"Скорость · {t.Callsign}", items,
-                    TagMenus.NearestIndex(speeds, t.AssignedSpeed ?? t.GroundSpeed), "", "узлы",
+                items.Add(new EditorItem("clear", ""));
+                TagEditor.Show(Radar, e.Position, $"Speed · {t.Callsign}", items,
+                    TagMenus.NearestIndex(speeds, t.AssignedSpeed ?? t.GroundSpeed), "", "knots",
                     v => Annotate(t, $".spd {v}"));
                 break;
             }
             case TagActions.Squawk:
             {
-                var items = new List<EditorItem> { new("выдать свободный", "", true) };
-                TagEditor.Show(Radar, e.Position, $"Код · {t.Callsign}", items, -1,
-                    t.AssignedSquawk?.ToString("0000") ?? "", "4 цифры 0–7", v => Annotate(t, $".sq {v}"));
+                var items = new List<EditorItem> { new("assign free code", "", true) };
+                TagEditor.Show(Radar, e.Position, $"Squawk · {t.Callsign}", items, -1,
+                    t.AssignedSquawk?.ToString("0000") ?? "", "4 digits 0–7", v => Annotate(t, $".sq {v}"));
                 break;
             }
             case TagActions.Scratchpad:
-                TagEditor.Show(Radar, e.Position, $"Заметка · {t.Callsign}", [], -1, t.Scratchpad, "Enter — сохранить, пусто — удалить",
+                TagEditor.Show(Radar, e.Position, $"Scratchpad · {t.Callsign}", [], -1, t.Scratchpad, "Enter to save, empty to delete",
                     v => Annotate(t, $".scratch {v}"));
                 break;
             case TagActions.FlightPlan:
@@ -861,7 +861,7 @@ public partial class MainWindow : Window
                 else ShowControllerMenu(t, cs => Coord(() => _session.HandoffAsync(t, cs)));
                 break;
             case TrackState.Redundant:
-                Info($"{t.Callsign} ведёт {t.Owner}");
+                Info($"{t.Callsign} is tracked by {t.Owner}");
                 break;
             default:
                 Coord(() => _session.AssumeAsync(t));
@@ -889,7 +889,7 @@ public partial class MainWindow : Window
             mi.Click += (_, _) => Annotate(t, $"{cmd} {n}");
             menu.Items.Add(mi);
         }
-        var auto = new MenuItem { Header = "автоматически" };
+        var auto = new MenuItem { Header = "automatic" };
         auto.Click += (_, _) => Annotate(t, cmd);
         menu.Items.Add(auto);
         menu.IsOpen = true;
@@ -900,14 +900,14 @@ public partial class MainWindow : Window
         bool departure = IsDepartureSide(t);
         string cmd = departure ? ".drwy" : ".arwy";
         var menu = new ContextMenu();
-        menu.Items.Add(new MenuItem { Header = departure ? "ВПП вылета" : "ВПП посадки", IsEnabled = false });
+        menu.Items.Add(new MenuItem { Header = departure ? "Departure runway" : "Arrival runway", IsEnabled = false });
         foreach (var r in RunwaysOf(departure ? t.Departure : t.Destination))
         {
             var mi = new MenuItem { Header = r };
             mi.Click += (_, _) => Annotate(t, $"{cmd} {r}");
             menu.Items.Add(mi);
         }
-        var auto = new MenuItem { Header = "по умолчанию" };
+        var auto = new MenuItem { Header = "default" };
         auto.Click += (_, _) => Annotate(t, cmd);
         menu.Items.Add(auto);
         menu.IsOpen = true;
@@ -945,26 +945,26 @@ public partial class MainWindow : Window
         switch (_workspace.StateOf(t))
         {
             case TrackState.TransferToMe:
-                Item($"Принять от {t.HandoffFrom}", () => Coord(() => _session.AcceptHandoffAsync(t)));
-                Item("Отклонить передачу", () => Coord(() => _session.RefuseHandoffAsync(t)));
+                Item($"Accept from {t.HandoffFrom}", () => Coord(() => _session.AcceptHandoffAsync(t)));
+                Item("Refuse handoff", () => Coord(() => _session.RefuseHandoffAsync(t)));
                 break;
             case TrackState.TransferFromMe:
-                Item($"Отменить передачу {t.HandoffTo}", () => Coord(() => _session.CancelHandoffAsync(t)));
-                Item("Отпустить", () => Coord(() => _session.ReleaseAsync(t)));
+                Item($"Cancel handoff to {t.HandoffTo}", () => Coord(() => _session.CancelHandoffAsync(t)));
+                Item("Release", () => Coord(() => _session.ReleaseAsync(t)));
                 break;
             case TrackState.Assumed:
-                var transfer = Sub("Передать");
+                var transfer = Sub("Hand off");
                 foreach (var i in ControllerItems(t, cs => Coord(() => _session.HandoffAsync(t, cs)))) transfer.Items.Add(i);
-                Item("Отпустить", () => Coord(() => _session.ReleaseAsync(t)));
+                Item("Release", () => Coord(() => _session.ReleaseAsync(t)));
                 break;
             case TrackState.Redundant:
-                menu.Items.Add(new MenuItem { Header = $"ведёт {t.Owner}", IsEnabled = false });
+                menu.Items.Add(new MenuItem { Header = $"tracked by {t.Owner}", IsEnabled = false });
                 break;
             default:
-                Item("Взять на сопровождение", () => Coord(() => _session.AssumeAsync(t)));
+                Item("Assume", () => Coord(() => _session.AssumeAsync(t)));
                 break;
         }
-        var point = Sub("Показать диспетчеру (point-out)");
+        var point = Sub("Point out");
         foreach (var i in ControllerItems(t, cs => Coord(() => _session.PointOutAsync(t, cs)))) point.Items.Add(i);
         menu.Items.Add(new Separator());
 
@@ -972,33 +972,33 @@ public partial class MainWindow : Window
         var sid = Sub($"SID  {proc.Sid(t) ?? "—"}");
         foreach (var p in proc.Sids(t.Departure, proc.DepartureRunway(t)).Select(p => p.Name).Distinct())
             Item(p, () => Annotate(t, $".sid {p}"), sid);
-        Item("автоматически", () => Annotate(t, ".sid"), sid);
+        Item("automatic", () => Annotate(t, ".sid"), sid);
         var star = Sub($"STAR  {proc.Star(t) ?? "—"}");
         foreach (var p in proc.Stars(t.Destination, proc.ArrivalRunway(t)).Select(p => p.Name).Distinct())
             Item(p, () => Annotate(t, $".star {p}"), star);
-        Item("автоматически", () => Annotate(t, ".star"), star);
-        var drwy = Sub($"ВПП вылета  {proc.DepartureRunway(t) ?? "—"}");
+        Item("automatic", () => Annotate(t, ".star"), star);
+        var drwy = Sub($"Departure runway  {proc.DepartureRunway(t) ?? "—"}");
         foreach (var r in RunwaysOf(t.Departure)) Item(r, () => Annotate(t, $".drwy {r}"), drwy);
-        var arwy = Sub($"ВПП посадки  {proc.ArrivalRunway(t) ?? "—"}");
+        var arwy = Sub($"Arrival runway  {proc.ArrivalRunway(t) ?? "—"}");
         foreach (var r in RunwaysOf(t.Destination)) Item(r, () => Annotate(t, $".arwy {r}"), arwy);
-        var clr = Item("Разрешение получено", () => Annotate(t, ".clr"));
+        var clr = Item("Clearance received", () => Annotate(t, ".clr"));
         clr.IsCheckable = true;
         clr.IsChecked = t.ClearanceReceived;
-        var ground = Sub($"Наземный статус  {(t.GroundState.Length > 0 ? t.GroundState : "—")}");
+        var ground = Sub($"Ground state  {(t.GroundState.Length > 0 ? t.GroundState : "—")}");
         foreach (var gs in new[] { "STUP", "PUSH", "TAXI", "DEPA" }) Item(gs, () => Annotate(t, $".state {gs}"), ground);
-        Item("снять", () => Annotate(t, ".state"), ground);
-        Item("Выдать код ответчика", () => OnAssignSquawk(this, new RoutedEventArgs()));
+        Item("clear", () => Annotate(t, ".state"), ground);
+        Item("Assign squawk", () => OnAssignSquawk(this, new RoutedEventArgs()));
         menu.Items.Add(new Separator());
 
-        var route = Item("Маршрут на радаре", () => t.ShowRoute = !t.ShowRoute);
+        var route = Item("Show route on radar", () => t.ShowRoute = !t.ShowRoute);
         route.IsCheckable = true;
         route.IsChecked = t.ShowRoute;
-        var halo = Sub($"Кольцо вокруг борта{(t.HaloNm is { } h ? $"  {h:0.#} NM" : "")}");
+        var halo = Sub($"Halo around aircraft{(t.HaloNm is { } h ? $"  {h:0.#} NM" : "")}");
         foreach (var nm in new[] { 1, 3, 5, 10, 15 }) Item($"{nm} NM", () => t.HaloNm = nm, halo);
-        Item("убрать", () => t.HaloNm = null, halo);
-        Item("Запросить план полёта", () => _ = _session.RequestFlightPlanAsync(t.Callsign));
-        Item("Попросить выйти на мою частоту", () => Annotate(t, $".contactme {t.Callsign}"));
-        Item("Личное сообщение…", () =>
+        Item("remove", () => t.HaloNm = null, halo);
+        Item("Request flight plan", () => _ = _session.RequestFlightPlanAsync(t.Callsign));
+        Item("Contact me", () => Annotate(t, $".contactme {t.Callsign}"));
+        Item("Private message…", () =>
         {
             CommandLine.Text = $".msg {t.Callsign} ";
             CommandLine.Focus();
@@ -1039,7 +1039,7 @@ public partial class MainWindow : Window
         }
         catch (FsdLoginException ex)
         {
-            Error("Не удалось подключиться: " + ex.Message);
+            Error("Could not connect: " + ex.Message);
         }
         finally
         {
@@ -1049,7 +1049,7 @@ public partial class MainWindow : Window
 
     private void UpdateConnectionState(bool connected)
     {
-        ConnectText.Text = connected ? "В СЕТИ" : "ПОДКЛЮЧИТЬСЯ";
+        ConnectText.Text = connected ? "ONLINE" : "CONNECT";
         ConnectDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "SuccessBrush" : "DangerBrush");
         StationText.Text = connected && _session.Info is { } i ? $"{i.Callsign}  {Frequency.Format(i.FrequencyKhz)}" : "";
         StationBox.Visibility = StationText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1091,10 +1091,10 @@ public partial class MainWindow : Window
         });
         VoiceButton.ToolTip = _voice.State switch
         {
-            VoiceState.Connected => $"Голосовая связь: подключено к {_voice.Server}",
-            VoiceState.Connecting => "Голосовая связь: подключение…",
-            _ when _voice.IsActive => "Голосовая связь: нет связи" + (_voice.LastError.Length > 0 ? " — " + _voice.LastError : ""),
-            _ => "Голосовая связь: частоты, тангента, аудио",
+            VoiceState.Connected => $"Voice: connected to {_voice.Server}",
+            VoiceState.Connecting => "Voice: connecting…",
+            _ when _voice.IsActive => "Voice: no connection" + (_voice.LastError.Length > 0 ? " — " + _voice.LastError : ""),
+            _ => "Voice: frequencies, push-to-talk, audio",
         };
         PttButton.Visibility = _voice.State == VoiceState.Connected ? Visibility.Visible : Visibility.Collapsed;
         if (_voice.Transmitting)
@@ -1159,10 +1159,10 @@ public partial class MainWindow : Window
         {
             // A broadcast or a call for a supervisor (.wallop): it must not go unnoticed.
             _sounds.Play(SoundEvent.PrivateMessage);
-            OpenChat("Радио");
+            OpenChat("Radio");
         }
         string from = m.Channel == MessageChannel.Radio && m.FrequencyKhz is { } f && !m.Outgoing ? $"{m.From} [{Frequency.Format(f)}]" : m.From;
-        AddLine("Радио", from, m.Text, color);
+        AddLine("Radio", from, m.Text, color);
     }
 
     private void AddLine(string chat, string from, string text, string color)
@@ -1180,8 +1180,8 @@ public partial class MainWindow : Window
             tab.FontWeight = FontWeights.Bold;
     }
 
-    private void Info(string text) => AddLine("Радио", "Network-ATC", text, _profile.Theme.MutedText);
-    private void Error(string text) => AddLine("Радио", "Network-ATC", text, _profile.Theme.Danger);
+    private void Info(string text) => AddLine("Radio", "Network-ATC", text, _profile.Theme.MutedText);
+    private void Error(string text) => AddLine("Radio", "Network-ATC", text, _profile.Theme.Danger);
 
     private void OpenChat(string name, bool activate = true)
     {
@@ -1230,7 +1230,7 @@ public partial class MainWindow : Window
         _historyIndex = _history.Count;
         try
         {
-            if (_activeChat != "Радио" && !line.StartsWith('.'))
+            if (_activeChat != "Radio" && !line.StartsWith('.'))
             {
                 await _session.SendPrivateAsync(_activeChat, _commands.ExpandAlias(line));
                 return;
@@ -1270,12 +1270,12 @@ public partial class MainWindow : Window
         return item;
     }
 
-    /// <summary>ФАЙЛ: sectors, the EuroScope profile import and the recent sectors.</summary>
+    /// <summary>FILE: sectors, the EuroScope profile import and the recent sectors.</summary>
     private void OnFileClick(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { PlacementTarget = FileButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
-        menu.Items.Add(MenuEntry("Открыть сектор…", () => OnOpenSectorClick(this, new RoutedEventArgs()), "Ctrl+O"));
-        menu.Items.Add(MenuEntry("Импорт профиля EuroScope (.prf)…", ImportEuroScopeProfile));
+        menu.Items.Add(MenuEntry("Open sector…", () => OnOpenSectorClick(this, new RoutedEventArgs()), "Ctrl+O"));
+        menu.Items.Add(MenuEntry("Import EuroScope profile (.prf)…", ImportEuroScopeProfile));
         var recent = _profile.RecentSectors.Where(r => File.Exists(r.Path)).Take(8).ToList();
         if (recent.Count > 0)
         {
@@ -1289,11 +1289,11 @@ public partial class MainWindow : Window
                 }));
         }
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuEntry("Выход", Close, "Alt+F4"));
+        menu.Items.Add(MenuEntry("Exit", Close, "Alt+F4"));
         menu.IsOpen = true;
     }
 
-    /// <summary>ПЛАГИНЫ: loaded Network-ATC plugins, their errors and the map layers taken from EuroScope plugins.</summary>
+    /// <summary>PLUGINS: loaded Network-ATC plugins, their errors and the map layers taken from EuroScope plugins.</summary>
     /// <summary>ATIS: the window of the controller's ATIS stations (it stays open while working).</summary>
     private void OnAtisClick(object sender, RoutedEventArgs e)
     {
@@ -1330,7 +1330,7 @@ public partial class MainWindow : Window
     {
         var menu = new ContextMenu { PlacementTarget = PluginsButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         if (_plugins.Plugins.Count == 0 && _plugins.Errors.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "Плагинов Network-ATC нет", IsEnabled = false });
+            menu.Items.Add(new MenuItem { Header = "No Network-ATC plugins", IsEnabled = false });
         foreach (var p in _plugins.Plugins)
             menu.Items.Add(new MenuItem { Header = $"{p.Plugin.Name}  {p.Plugin.Version}", IsEnabled = false });
         foreach (var err in _plugins.Errors)
@@ -1338,13 +1338,13 @@ public partial class MainWindow : Window
         if (_profile.ImportedPlugins.Count > 0)
         {
             menu.Items.Add(new Separator());
-            menu.Items.Add(new MenuItem { Header = "Из профиля EuroScope", IsEnabled = false });
+            menu.Items.Add(new MenuItem { Header = "From EuroScope profile", IsEnabled = false });
             foreach (var name in _profile.ImportedPlugins)
                 menu.Items.Add(new MenuItem { Header = "    " + name, IsEnabled = false });
         }
         AddEsPluginMenu(menu);
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuEntry("Открыть папку плагинов", () =>
+        menu.Items.Add(MenuEntry("Open plugins folder", () =>
         {
             Directory.CreateDirectory(PluginFolder);
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(PluginFolder) { UseShellExecute = true });
@@ -1358,7 +1358,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void ImportEuroScopeProfile()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Профиль EuroScope", Filter = "Профиль EuroScope (*.prf)|*.prf|Все файлы|*.*" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "EuroScope profile", Filter = "EuroScope profile (*.prf)|*.prf|All files|*.*" };
         if (dialog.ShowDialog(this) != true) return;
         NetworkAtc.Core.Import.EuroScopeImportResult result;
         try
@@ -1367,7 +1367,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Error($"Импорт профиля: {ex.Message}");
+            Error($"Profile import: {ex.Message}");
             return;
         }
         try
@@ -1378,7 +1378,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            result.Report.Warn($"Сектор с картами плагинов не сохранён: {ex.Message}");
+            result.Report.Warn($"Sector with plugin maps not saved: {ex.Message}");
         }
         // The plugins of the imported profile belong to its sector; the ones in use until now stay with theirs.
         result.Profile.AssignPluginsTo(result.Profile.SectorFile, _profile);
@@ -1388,8 +1388,8 @@ public partial class MainWindow : Window
         SaveProfile();
         SyncEsPlugins();
         _dirty = true;
-        Info($"Профиль EuroScope «{result.Source.Name}» импортирован: {result.Report.Imported.Count()} импортировано, " +
-             $"{result.Report.Skipped.Count()} пропущено, {result.Report.Warnings.Count()} предупреждений");
+        Info($"EuroScope profile \"{result.Source.Name}\" imported: {result.Report.Imported.Count()} imported, " +
+             $"{result.Report.Skipped.Count()} skipped, {result.Report.Warnings.Count()} warnings");
         ShowImportReport(result.Source.Name, result.Report);
     }
 
@@ -1400,10 +1400,10 @@ public partial class MainWindow : Window
             var list = lines.ToList();
             return list.Count == 0 ? "" : $"{title}\n" + string.Join("\n", list.Select(l => "  • " + l)) + "\n\n";
         }
-        var text = Section("ИМПОРТИРОВАНО", report.Imported) + Section("ПРЕДУПРЕЖДЕНИЯ", report.Warnings) + Section("ПРОПУЩЕНО", report.Skipped);
+        var text = Section("IMPORTED", report.Imported) + Section("WARNINGS", report.Warnings) + Section("SKIPPED", report.Skipped);
         var window = new Window
         {
-            Title = $"Импорт профиля EuroScope — {name}",
+            Title = $"EuroScope profile import — {name}",
             Owner = this,
             Width = 720,
             Height = 560,
@@ -1559,7 +1559,7 @@ public partial class MainWindow : Window
         _profile.ViewNmPerPixel = Radar.NmPerPixel;
         foreach (var w in _windows.Values) SaveWindowLayout(w);
         try { _profile.Save(_profilePath); }
-        catch (IOException e) { Error("Не удалось сохранить профиль: " + e.Message); }
+        catch (IOException e) { Error("Could not save profile: " + e.Message); }
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

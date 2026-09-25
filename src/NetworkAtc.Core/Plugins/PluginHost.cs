@@ -109,6 +109,6 @@ public sealed class PluginHost : IPluginHost
     private void Safe(Action a)
     {
         try { a(); }
-        catch (Exception e) { _registry.RaiseLog($"[{_owner}] ошибка: {e.Message}"); }
+        catch (Exception e) { _registry.RaiseLog($"[{_owner}] error: {e.Message}"); }
     }
 }

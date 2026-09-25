@@ -60,7 +60,7 @@ public partial class MainWindow
         string? exe = EsHost.FindHostExe(AppContext.BaseDirectory);
         if (exe == null)
         {
-            if (_profile.EsPlugins.Count > 0) Error("Плагины EuroScope не запущены: нет папки esbridge рядом с программой");
+            if (_profile.EsPlugins.Count > 0) Error("EuroScope plugins not started: no esbridge folder next to the program");
             return;
         }
         var es = new EsBridge(_session, _workspace, () => _profile);
@@ -86,7 +86,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            Error("Плагины EuroScope не запущены: " + ex.Message);
+            Error("EuroScope plugins not started: " + ex.Message);
             await es.DisposeAsync();
             return;
         }
@@ -98,7 +98,7 @@ public partial class MainWindow
         foreach (var path in _profile.EsPlugins.ToList())
         {
             if (File.Exists(path)) es.LoadPlugin(path);
-            else Error($"Плагин EuroScope не найден: {path}");
+            else Error($"EuroScope plugin not found: {path}");
         }
     }
 
@@ -290,7 +290,7 @@ public partial class MainWindow
         int x = (int)at.X, y = (int)at.Y;
         if (p.IsEdit)
         {
-            TagEditor.Show(Radar, at, p.Title.Length > 0 ? p.Title : "Ввод", [], -1, p.Initial, "Enter — ввод",
+            TagEditor.Show(Radar, at, p.Title.Length > 0 ? p.Title : "Input", [], -1, p.Initial, "Enter to confirm",
                 v => _es?.SelectPopup(p, p.FunctionId, v, x, y));
             return;
         }
@@ -310,7 +310,7 @@ public partial class MainWindow
 
     private void OnEsUserMessage(EsUserMessage m)
     {
-        string chat = m.Handler.Length > 0 ? m.Handler : "Радио";
+        string chat = m.Handler.Length > 0 ? m.Handler : "Radio";
         AddLine(chat, m.Sender.Length > 0 ? m.Sender : chat, m.Text, m.Flash ? _profile.Theme.Warning : _profile.Theme.Text);
         if (m.NeedConfirmation || m.Flash) OpenChat(chat);
     }
@@ -406,20 +406,20 @@ public partial class MainWindow
         CallEsFunction(EsFunctionPrefix + plugin + ":" + function, t, field, at);
     }
 
-    // ---- ПЛАГИНЫ menu ---------------------------------------------------------------------------------------
+    // ---- PLUGINS menu ---------------------------------------------------------------------------------------
 
     private void AddEsPluginMenu(ContextMenu menu)
     {
         menu.Items.Add(new Separator());
-        menu.Items.Add(new MenuItem { Header = "Плагины EuroScope", IsEnabled = false });
+        menu.Items.Add(new MenuItem { Header = "EuroScope plugins", IsEnabled = false });
         if (_es == null)
-            menu.Items.Add(new MenuItem { Header = "    не запущены (нет папки esbridge)", IsEnabled = false });
+            menu.Items.Add(new MenuItem { Header = "    not started (no esbridge folder)", IsEnabled = false });
         foreach (var p in _es?.Plugins ?? [])
         {
             var item = new MenuItem { Header = $"    {p.Name}  {p.Version}" + (p.Author.Length > 0 ? $" · {p.Author}" : "") };
             var id = p.Id;
             var path = p.Path;
-            item.Items.Add(MenuEntry("Выгрузить", () =>
+            item.Items.Add(MenuEntry("Unload", () =>
             {
                 _es?.UnloadPlugin(id);
                 _profile.EsPlugins.RemoveAll(x => x.Equals(path, StringComparison.OrdinalIgnoreCase));
@@ -429,16 +429,16 @@ public partial class MainWindow
         }
         if (_es != null)
         {
-            menu.Items.Add(MenuEntry("Загрузить плагин EuroScope (.dll)…", () =>
+            menu.Items.Add(MenuEntry("Load EuroScope plugin (.dll)…", () =>
             {
-                var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Плагин EuroScope", Filter = "Плагин EuroScope (*.dll)|*.dll" };
+                var dialog = new Microsoft.Win32.OpenFileDialog { Title = "EuroScope plugin", Filter = "EuroScope plugin (*.dll)|*.dll" };
                 if (dialog.ShowDialog(this) != true) return;
                 if (!_profile.EsPlugins.Contains(dialog.FileName, StringComparer.OrdinalIgnoreCase)) _profile.EsPlugins.Add(dialog.FileName);
                 SaveProfile();
                 _es?.LoadPlugin(dialog.FileName);
             }));
-            var display = new MenuItem { Header = "Тип экрана" };
-            var standard = new MenuItem { Header = "Стандартный радар", IsCheckable = true, IsChecked = _profile.EsDisplayType.Length == 0 };
+            var display = new MenuItem { Header = "Display type" };
+            var standard = new MenuItem { Header = "Standard radar", IsCheckable = true, IsChecked = _profile.EsDisplayType.Length == 0 };
             standard.Click += (_, _) => SetEsDisplay("");
             display.Items.Add(standard);
             foreach (var d in _es.DisplayTypes.Where(d => d.CanBeCreated))
@@ -452,7 +452,7 @@ public partial class MainWindow
             var lists = _es.Lists.ToList();
             if (lists.Count > 0)
             {
-                var sub = new MenuItem { Header = "Списки плагинов" };
+                var sub = new MenuItem { Header = "Plugin lists" };
                 foreach (var l in lists)
                 {
                     var id = l.Id;
@@ -482,7 +482,7 @@ public partial class MainWindow
         foreach (var path in _profile.EsPlugins.Where(p => !running.Contains(p)))
         {
             if (File.Exists(path)) _es.LoadPlugin(path);
-            else Error($"Плагин EuroScope не найден: {path}");
+            else Error($"EuroScope plugin not found: {path}");
         }
         if (_esOpenDisplay != null)
         {

@@ -91,7 +91,7 @@ public sealed partial class AtcSession
     public async Task<string?> AssumeAsync(Track t)
     {
         if (t.HandoffPending && IsMe(t.HandoffTo)) return await AcceptHandoffAsync(t).ConfigureAwait(false);
-        if (t.Owner.Length > 0 && !IsMe(t.Owner)) return $"{t.Callsign} на сопровождении у {t.Owner}";
+        if (t.Owner.Length > 0 && !IsMe(t.Owner)) return $"{t.Callsign} is tracked by {t.Owner}";
         SetOwner(t, Me);
         Changed(t);
         await Send(AtcPackets.Shared(Me, "IT", t.Callsign)).ConfigureAwait(false);
@@ -100,7 +100,7 @@ public sealed partial class AtcSession
 
     public async Task<string?> ReleaseAsync(Track t)
     {
-        if (!t.IsTracked) return $"{t.Callsign} не на вашем сопровождении";
+        if (!t.IsTracked) return $"{t.Callsign} is not tracked by you";
         if (t.HandoffPending && IsMe(t.HandoffFrom)) await CancelHandoffAsync(t).ConfigureAwait(false);
         SetOwner(t, "");
         Changed(t);
@@ -112,9 +112,9 @@ public sealed partial class AtcSession
     public async Task<string?> HandoffAsync(Track t, string to)
     {
         to = to.Trim().ToUpperInvariant();
-        if (!t.IsTracked) return $"{t.Callsign} не на вашем сопровождении";
-        if (IsMe(to)) return "Нельзя передать борт самому себе";
-        if (IsConnected && !_controllers.ContainsKey(to)) return $"{to} не в сети";
+        if (!t.IsTracked) return $"{t.Callsign} is not tracked by you";
+        if (IsMe(to)) return "You cannot hand off to yourself";
+        if (IsConnected && !_controllers.ContainsKey(to)) return $"{to} is not online";
         t.HandoffFrom = Me;
         t.HandoffTo = to;
         Changed(t);
@@ -124,7 +124,7 @@ public sealed partial class AtcSession
 
     public async Task<string?> AcceptHandoffAsync(Track t)
     {
-        if (!t.HandoffPending || !IsMe(t.HandoffTo)) return $"{t.Callsign} вам не передают";
+        if (!t.HandoffPending || !IsMe(t.HandoffTo)) return $"{t.Callsign} is not being handed off to you";
         string from = t.HandoffFrom;
         ClearHandoff(t);
         SetOwner(t, Me);
@@ -136,7 +136,7 @@ public sealed partial class AtcSession
 
     public async Task<string?> RefuseHandoffAsync(Track t)
     {
-        if (!t.HandoffPending || !IsMe(t.HandoffTo)) return $"{t.Callsign} вам не передают";
+        if (!t.HandoffPending || !IsMe(t.HandoffTo)) return $"{t.Callsign} is not being handed off to you";
         string from = t.HandoffFrom;
         ClearHandoff(t);
         Changed(t);
@@ -147,7 +147,7 @@ public sealed partial class AtcSession
     /// <summary>Withdraw our own pending offer.</summary>
     public async Task<string?> CancelHandoffAsync(Track t)
     {
-        if (!t.HandoffPending || !IsMe(t.HandoffFrom)) return $"{t.Callsign}: передачи нет";
+        if (!t.HandoffPending || !IsMe(t.HandoffFrom)) return $"{t.Callsign}: no handoff in progress";
         string to = t.HandoffTo;
         ClearHandoff(t);
         Changed(t);
@@ -158,8 +158,8 @@ public sealed partial class AtcSession
     public async Task<string?> PointOutAsync(Track t, string to)
     {
         to = to.Trim().ToUpperInvariant();
-        if (!IsConnected) return "Точка передачи работает только в сети";
-        if (!_controllers.ContainsKey(to)) return $"{to} не в сети";
+        if (!IsConnected) return "Point-out only works when connected";
+        if (!_controllers.ContainsKey(to)) return $"{to} is not online";
         await Send(AtcPackets.Coordination(Me, to, "PT", t.Callsign)).ConfigureAwait(false);
         return null;
     }
@@ -175,9 +175,9 @@ public sealed partial class AtcSession
     /// <summary>".wallop": a text request to every supervisor online.</summary>
     public async Task SendSupervisorRequestAsync(string text)
     {
-        var fsd = _fsd ?? throw new InvalidOperationException("Нет подключения к сети");
+        var fsd = _fsd ?? throw new InvalidOperationException("Not connected to the network");
         await fsd.SendAsync(AtcPackets.TextMessage(Me, "*S", text)).ConfigureAwait(false);
-        Raise(new AtcMessage(MessageChannel.Broadcast, Me, "[супервайзеру] " + text, _clock(), Outgoing: true));
+        Raise(new AtcMessage(MessageChannel.Broadcast, Me, "[to supervisors] " + text, _clock(), Outgoing: true));
     }
 
     /// <summary>Sends a flight plan amendment to the server and applies it locally.</summary>

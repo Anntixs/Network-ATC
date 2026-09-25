@@ -68,9 +68,9 @@ public sealed partial class AtcSession : IAsyncDisposable
 
     public async Task ConnectAsync(AtcConnectInfo info, CancellationToken ct = default)
     {
-        if (IsConnected) throw new InvalidOperationException("Уже подключено");
+        if (IsConnected) throw new InvalidOperationException("Already connected");
         info = info with { Callsign = info.Callsign.Trim().ToUpperInvariant() };
-        if (!IsValidCallsign(info.Callsign)) throw new FsdLoginException("Неверный позывной");
+        if (!IsValidCallsign(info.Callsign)) throw new FsdLoginException("Invalid callsign");
 
         var fsd = new FsdClient();
         fsd.PacketReceived += OnPacket;
@@ -92,7 +92,7 @@ public sealed partial class AtcSession : IAsyncDisposable
         _positionTimer = new Timer(_ => _ = SendPositionAsync(), null, TimeSpan.Zero, PositionInterval);
         _sweepTimer = new Timer(_ => Sweep(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
         ConnectionChanged?.Invoke(this, true);
-        Raise(new AtcMessage(MessageChannel.Server, "Network-ATC", $"Подключено как {info.Callsign}", _clock()));
+        Raise(new AtcMessage(MessageChannel.Server, "Network-ATC", $"Connected as {info.Callsign}", _clock()));
     }
 
     public async Task DisconnectAsync()
@@ -136,7 +136,7 @@ public sealed partial class AtcSession : IAsyncDisposable
 
     public async Task SendRadioAsync(string text)
     {
-        var fsd = _fsd ?? throw new InvalidOperationException("Нет подключения к сети");
+        var fsd = _fsd ?? throw new InvalidOperationException("Not connected to the network");
         var info = _info!;
         await fsd.SendAsync(AtcPackets.TextMessage(info.Callsign, Frequency.ToFsdAddress(info.FrequencyKhz), text)).ConfigureAwait(false);
         Raise(new AtcMessage(MessageChannel.Radio, info.Callsign, text, _clock(), FrequencyKhz: info.FrequencyKhz, Outgoing: true));
@@ -144,9 +144,9 @@ public sealed partial class AtcSession : IAsyncDisposable
 
     public async Task SendPrivateAsync(string to, string text)
     {
-        var fsd = _fsd ?? throw new InvalidOperationException("Нет подключения к сети");
+        var fsd = _fsd ?? throw new InvalidOperationException("Not connected to the network");
         to = to.Trim().ToUpperInvariant();
-        if (!IsValidCallsign(to)) throw new InvalidOperationException("Неверный позывной получателя");
+        if (!IsValidCallsign(to)) throw new InvalidOperationException("Invalid recipient callsign");
         await fsd.SendAsync(AtcPackets.TextMessage(Callsign, to, text)).ConfigureAwait(false);
         Raise(new AtcMessage(MessageChannel.Private, Callsign, text, _clock(), Peer: to, Outgoing: true));
     }
@@ -208,7 +208,7 @@ public sealed partial class AtcSession : IAsyncDisposable
                     _ = _fsd?.SendAsync($"$CR{Callsign}:{p[0]}:ATC:Y:{Callsign}");
                 break;
             case "$ER":
-                Raise(new AtcMessage(MessageChannel.Server, "Сервер", $"{p[4]} {p[3]}".Trim(), _clock(), IsError: true));
+                Raise(new AtcMessage(MessageChannel.Server, "Server", $"{p[4]} {p[3]}".Trim(), _clock(), IsError: true));
                 break;
         }
     }

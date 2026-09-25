@@ -232,7 +232,7 @@ public static class TopSkyMaps
 /// <summary>
 /// TopSky areas file (TopSkyAreas.txt): restricted and danger areas.
 /// AREA:id[:name], CATEGORY:name, LIMITS:lower:upper (hundreds of feet), LABEL:p, COORD:p, CIRCLE:p:radius nm.
-/// Each category becomes a layer "prefix · Зоны · category"; the area outline is labelled "id lower–upper".
+/// Each category becomes a layer "prefix · Areas · category"; the area outline is labelled "id lower–upper".
 /// </summary>
 public static class TopSkyAreas
 {
@@ -293,7 +293,7 @@ public static class TopSkyAreas
         foreach (var a in areas)
         {
             if (a.Coords.Count < 3 && a.Circles.Count == 0) continue;
-            string layer = $"{prefix} · Зоны" + (a.Category.Length > 0 ? " · " + a.Category : "");
+            string layer = $"{prefix} · Areas" + (a.Category.Length > 0 ? " · " + a.Category : "");
             string? color = categoryColors.GetValueOrDefault(a.Category);
             maps.Polyline(layer, a.Coords, color, a.Name, closed: true);
             foreach (var (center, radius) in a.Circles) maps.Circle(layer, center, radius, color, a.Name);
@@ -311,7 +311,7 @@ public static class TopSkyAreas
 /// <summary>
 /// Ground Radar plugin stands (GRpluginStands.txt): "STAND:UUEE:24:N055.58.20.000:E037.24.53.000:20"
 /// (airport, stand, position, radius in metres), optionally followed by COORD lines with the stand outline;
-/// WTC, USE, AREA and other attribute lines are ignored. Each airport becomes a layer "Стоянки UUEE".
+/// WTC, USE, AREA and other attribute lines are ignored. Each airport becomes a layer "Stands UUEE".
 /// </summary>
 public static class GroundRadarStands
 {
@@ -343,7 +343,7 @@ public static class GroundRadarStands
                     int i = 3;
                     if (!maps.TryPoint(f, ref i, out center)) break;
                     string airport = f[1].Trim().ToUpperInvariant();
-                    layer = "Стоянки " + airport;
+                    layer = "Stands " + airport;
                     name = f[2].Trim();
                     radiusM = i < f.Length && EsNames.TryDouble(f[i], out var r) ? r : 0;
                     counts[airport] = counts.GetValueOrDefault(airport) + 1;

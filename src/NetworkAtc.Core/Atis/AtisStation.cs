@@ -34,8 +34,8 @@ public sealed class AtisStation : IAsyncDisposable
 
     public async Task ConnectAsync(AtcConnectInfo controller, int frequencyKhz, GeoPoint position, CancellationToken ct = default)
     {
-        if (_fsd != null) throw new InvalidOperationException("ATIS уже подключён");
-        if (!AtcSession.IsValidCallsign(Callsign)) throw new FsdLoginException($"Неверный позывной ATIS: {Callsign}");
+        if (_fsd != null) throw new InvalidOperationException("ATIS is already connected");
+        if (!AtcSession.IsValidCallsign(Callsign)) throw new FsdLoginException($"Invalid ATIS callsign: {Callsign}");
         (_realName, _cid, _rating, _frequencyKhz, _position) = (controller.RealName, controller.Cid, controller.Rating, frequencyKhz, position);
         var fsd = new FsdClient();
         fsd.PacketReceived += OnPacket;

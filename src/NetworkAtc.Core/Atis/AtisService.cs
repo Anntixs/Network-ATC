@@ -65,6 +65,6 @@ public sealed class AtisService
         string airport = s.Airport.ToUpperInvariant();
         _profile().ActiveRunways.TryGetValue(airport, out var runways);
         return AtisText.Speech(s.SpokenName.Trim().Length > 0 ? s.SpokenName.Trim() : airport, Letter(airport), _clock(), runways,
-            _metar(airport), s.Remark, !s.Language.Equals("en", StringComparison.OrdinalIgnoreCase));
+            _metar(airport), s.Remark);
     }
 }

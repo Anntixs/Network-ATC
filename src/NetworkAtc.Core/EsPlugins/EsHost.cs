@@ -34,7 +34,7 @@ public sealed class EsHost : IAsyncDisposable
     /// <summary>Starts the host process and waits until it is ready.</summary>
     public async Task StartAsync(string hostExe, CancellationToken ct = default)
     {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Плагины EuroScope работают только в Windows");
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("EuroScope plugins only work on Windows");
         string name = $"natc-es-{Environment.ProcessId}-{Guid.NewGuid():N}";
         var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         var process = Process.Start(new ProcessStartInfo(hostExe, name)
@@ -42,7 +42,7 @@ public sealed class EsHost : IAsyncDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(hostExe)!,
-        }) ?? throw new InvalidOperationException("Не удалось запустить хост плагинов");
+        }) ?? throw new InvalidOperationException("Could not start the plugin host");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
         try
@@ -53,11 +53,11 @@ public sealed class EsHost : IAsyncDisposable
         {
             try { process.Kill(); } catch (InvalidOperationException) { }
             await server.DisposeAsync().ConfigureAwait(false);
-            throw new TimeoutException("Хост плагинов не ответил");
+            throw new TimeoutException("The plugin host did not respond");
         }
         _process = process;
         process.EnableRaisingEvents = true;
-        process.Exited += (_, _) => Close($"хост плагинов завершился (код {SafeExitCode(process)})");
+        process.Exited += (_, _) => Close($"the plugin host exited (code {SafeExitCode(process)})");
         Attach(server);
         await _ready.Task.WaitAsync(timeout.Token).ConfigureAwait(false);
     }
@@ -87,7 +87,7 @@ public sealed class EsHost : IAsyncDisposable
             {
                 await pipe.ReadExactlyAsync(header, ct).ConfigureAwait(false);
                 int length = BitConverter.ToInt32(header, 0);
-                if (length is <= 0 or > 256 * 1024 * 1024) throw new InvalidDataException("Неверный кадр от хоста плагинов");
+                if (length is <= 0 or > 256 * 1024 * 1024) throw new InvalidDataException("Invalid frame from the plugin host");
                 var frame = new byte[length];
                 await pipe.ReadExactlyAsync(frame, ct).ConfigureAwait(false);
                 var type = (EsMsg)frame[0];
@@ -98,7 +98,7 @@ public sealed class EsHost : IAsyncDisposable
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or OperationCanceledException or InvalidDataException or ObjectDisposedException)
         {
-            Close(e is OperationCanceledException ? "" : "связь с хостом плагинов потеряна");
+            Close(e is OperationCanceledException ? "" : "connection to the plugin host lost");
         }
     }
 
