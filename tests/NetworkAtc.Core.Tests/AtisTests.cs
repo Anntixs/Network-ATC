@@ -19,43 +19,43 @@ public class AtisTests
         Assert.Equal("A", AtisText.Next(""));
         Assert.Equal("UUEE_ATIS", AtisText.Callsign("uuee", ""));
         Assert.Equal("UUEE_A_ATIS", AtisText.Callsign("UUEE", "a"));
-        Assert.Equal("Браво", AtisText.Phonetic("b", russian: true));
-        Assert.Equal("X-ray", AtisText.Phonetic("X", russian: false));
-        Assert.Equal("24 правая", AtisText.Runway("24R", russian: true));
-        Assert.Equal("6 left", AtisText.Runway("06L", russian: false));
+        Assert.Equal("Bravo", AtisText.Phonetic("b"));
+        Assert.Equal("X-ray", AtisText.Phonetic("X"));
+        Assert.Equal("24 right", AtisText.Runway("24R"));
+        Assert.Equal("6 left", AtisText.Runway("06L"));
     }
 
     [Fact]
-    public void SpeechFromTheMetar_InRussianAndEnglish()
+    public void SpeechFromTheMetar()
     {
         var rwy = new RunwayUse { Departure = ["24R"], Arrival = ["24L"] };
-        var ru = AtisText.Speech("Шереметьево", "B", new DateTime(2026, 9, 24, 12, 30, 0), rwy, Uuee, "Рулёжная дорожка B закрыта", russian: true);
-        Assert.StartsWith("Шереметьево, информация Браво, время 1230.", ru);
-        Assert.Contains("Посадка на полосу 24 левая. Взлёт с полосы 24 правая.", ru);
-        Assert.Contains("Ветер 270 градусов 8 метра в секунду.", ru);
-        Assert.Contains("Видимость более 10 километров.", ru);
-        Assert.Contains("слабый ливневый дождь.", ru);
-        Assert.Contains("Облачность значительная кучево-дождевая 610 метров, сплошная 3050 метров.", ru);
-        Assert.Contains("Температура 15, точка росы 10.", ru);
-        Assert.Contains("Давление QNH 1013 гектопаскалей.", ru);
-        Assert.Contains("Рулёжная дорожка B закрыта.", ru);
-        Assert.EndsWith("Сообщите диспетчеру о получении информации Браво.", ru);
+        var en = AtisText.Speech("Sheremetyevo", "B", new DateTime(2026, 9, 24, 12, 30, 0), rwy, Uuee, "Taxiway B closed");
+        Assert.StartsWith("Sheremetyevo information Bravo, time 1230.", en);
+        Assert.Contains("Landing runway 24 left. Departure runway 24 right.", en);
+        Assert.Contains("Wind 270 degrees 16 knots.", en);
+        Assert.Contains("Visibility 10 kilometers or more.", en);
+        Assert.Contains("light showers of rain.", en);
+        Assert.Contains("Clouds broken 2000 feet cumulonimbus, overcast 10000 feet.", en);
+        Assert.Contains("Temperature 15, dew point 10.", en);
+        Assert.Contains("QNH 1013.", en);
+        Assert.Contains("Taxiway B closed.", en);
+        Assert.EndsWith("Advise on initial contact you have information Bravo.", en);
 
-        var en = AtisText.Speech("UUEE", "C", new DateTime(2026, 9, 24, 12, 30, 0), new RunwayUse { Departure = ["24"], Arrival = ["24"] },
-            MetarParser.Parse("UUEE 241230Z 00000KT CAVOK M02/M05 Q1030")!, "", russian: false);
-        Assert.Contains("UUEE information Charlie, time 1230.", en);
-        Assert.Contains("Runway in use 24.", en);
-        Assert.Contains("Wind calm.", en);
-        Assert.Contains("CAVOK.", en);
-        Assert.Contains("Temperature minus 2, dew point minus 5.", en);
-        Assert.Contains("QNH 1030.", en);
+        var calm = AtisText.Speech("UUEE", "C", new DateTime(2026, 9, 24, 12, 30, 0), new RunwayUse { Departure = ["24"], Arrival = ["24"] },
+            MetarParser.Parse("UUEE 241230Z 00000KT CAVOK M02/M05 Q1030")!, "");
+        Assert.Contains("UUEE information Charlie, time 1230.", calm);
+        Assert.Contains("Runway in use 24.", calm);
+        Assert.Contains("Wind calm.", calm);
+        Assert.Contains("CAVOK.", calm);
+        Assert.Contains("Temperature minus 2, dew point minus 5.", calm);
+        Assert.Contains("QNH 1030.", calm);
     }
 
     [Fact]
     public void Service_ExpandsTheTextPerAirport_AndMovesTheLetterOnANewMetar()
     {
         var profile = new Profile();
-        profile.Atis.Add(new AtisSettings { Airport = "UUEE", Frequency = "128.050", Remark = "ПТИЦЫ" });
+        profile.Atis.Add(new AtisSettings { Airport = "UUEE", Frequency = "128.050", Remark = "BIRD ACTIVITY" });
         var metars = new Dictionary<string, Metar> { ["UUEE"] = Uuee };
         var service = new AtisService(() => profile,
             line => line.Replace("$atiscode(UUEE)", profile.AtisLetters.GetValueOrDefault("UUEE", "")).Replace("$metar(UUEE)", metars["UUEE"].Raw)
@@ -66,10 +66,10 @@ public class AtisTests
 
         service.SetLetter("uuee", "A");
         var text = service.Text(profile.Atis[0]);
-        Assert.Equal("UUEE ATIS ИНФОРМАЦИЯ A 1230", text[0]);
-        Assert.Equal("ВПП ВЗЛЁТ 24R ПОСАДКА 24L", text[1]);
+        Assert.Equal("UUEE ATIS INFORMATION A 1230", text[0]);
+        Assert.Equal("DEPARTURE RWY 24R ARRIVAL RWY 24L", text[1]);
         Assert.Equal(Uuee.Raw, text[2]);
-        Assert.Equal("ПТИЦЫ", text[^1]);
+        Assert.Equal("BIRD ACTIVITY", text[^1]);
 
         service.OnMetar(Uuee);                  // the first METAR seen: no change
         service.OnMetar(Uuee);                  // the same again: no change
@@ -80,7 +80,7 @@ public class AtisTests
         service.OnMetar(MetarParser.Parse("UUEE 241330Z 27010MPS 9999 BKN020 15/10 Q1011")!);
         Assert.Equal("B", service.Letter("UUEE"));
         Assert.Equal(["UUEE", "UUEE"], changed);
-        Assert.Contains("информация Браво", service.Speech(profile.Atis[0]));
+        Assert.Contains("information Bravo", service.Speech(profile.Atis[0]));
     }
 
     [Fact]

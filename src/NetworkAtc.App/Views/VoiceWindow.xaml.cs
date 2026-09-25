@@ -43,7 +43,7 @@ public partial class VoiceWindow : Window
         PrimaryTx.IsChecked = v.PrimaryTransmit;
         PrimaryTx.IsEnabled = _canTransmit;
         PrimaryVolume.Value = v.PrimaryVolume;
-        if (!_canTransmit) ObserverText.Text = "Наблюдатель: только приём";
+        if (!_canTransmit) ObserverText.Text = "Observer: receive only";
         foreach (var f in v.Frequencies) AddRow(f);
 
         var (inputs, outputs) = VoiceService.Devices();
@@ -76,11 +76,11 @@ public partial class VoiceWindow : Window
         string server = _voice.Server;
         (StateText.Text, string brush) = _voice.State switch
         {
-            VoiceState.Connected => ($"Подключено к {server}", "SuccessBrush"),
-            VoiceState.Connecting => ($"Подключение к {server}…", "AccentBrush"),
-            _ when !_profile.Voice.Enabled => ("Выключено: включите «Подключать голосовую связь вместе с сетью» ниже", "MutedBrush"),
-            _ when _voice.IsActive => ("Нет связи с голосовым сервером" + (_voice.LastError.Length > 0 ? ": " + _voice.LastError : ""), "DangerBrush"),
-            _ => ("Не подключено: голос включается вместе с подключением к сети", "MutedBrush"),
+            VoiceState.Connected => ($"Connected to {server}", "SuccessBrush"),
+            VoiceState.Connecting => ($"Connecting to {server}…", "AccentBrush"),
+            _ when !_profile.Voice.Enabled => ("Off: enable \"Connect voice together with the network\" below", "MutedBrush"),
+            _ when _voice.IsActive => ("No connection to the voice server" + (_voice.LastError.Length > 0 ? ": " + _voice.LastError : ""), "DangerBrush"),
+            _ => ("Not connected: voice starts when you connect to the network", "MutedBrush"),
         };
         StateDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, brush);
         ReconnectButton.IsEnabled = _voice.IsActive && _voice.State != VoiceState.Connecting;
@@ -88,10 +88,10 @@ public partial class VoiceWindow : Window
 
     private static void FillDevices(ComboBox box, IReadOnlyList<string> devices, string selected)
     {
-        var items = new List<DeviceItem> { new("", "По умолчанию (Windows)") };
+        var items = new List<DeviceItem> { new("", "Default (Windows)") };
         items.AddRange(devices.Select(d => new DeviceItem(d, d)));
         // A saved device that is unplugged now: keep it, the default device is used meanwhile.
-        if (selected.Length > 0 && VoicePlan.DeviceIndex(devices, selected) < 0) items.Add(new DeviceItem(selected, selected + " (не найдено)"));
+        if (selected.Length > 0 && VoicePlan.DeviceIndex(devices, selected) < 0) items.Add(new DeviceItem(selected, selected + " (not found)"));
         box.ItemsSource = items;
         box.SelectedItem = items.First(i => i.Name.Equals(selected, StringComparison.OrdinalIgnoreCase) || selected.Length == 0 && i.Name.Length == 0);
     }
@@ -107,7 +107,7 @@ public partial class VoiceWindow : Window
         var rx = new CheckBox { IsChecked = f.Receive, VerticalAlignment = VerticalAlignment.Center };
         var tx = new CheckBox { IsChecked = f.Transmit && _canTransmit, IsEnabled = _canTransmit, VerticalAlignment = VerticalAlignment.Center };
         var volume = new Slider { Minimum = 0, Maximum = 1, Value = f.Volume, VerticalAlignment = VerticalAlignment.Center };
-        var remove = new Button { Content = "✕", Padding = new Thickness(8, 2, 8, 2), ToolTip = "Убрать частоту" };
+        var remove = new Button { Content = "✕", Padding = new Thickness(8, 2, 8, 2), ToolTip = "Remove frequency" };
         Grid.SetColumn(rx, 1);
         Grid.SetColumn(tx, 2);
         Grid.SetColumn(volume, 3);
@@ -139,7 +139,7 @@ public partial class VoiceWindow : Window
         PttText.Text = _ptt.Describe();
         string? clash = PttKeys.ConflictingAction(_ptt, _profile.KeyBindings);
         PttWarning.Text = clash == null ? ""
-            : $"Эта клавиша назначена на команду «{clash}»: пока она служит тангентой, команда по ней не выполняется. Переназначьте одно из двух.";
+            : $"This key is bound to the \"{clash}\" command: while it is the push-to-talk key, that command will not run. Reassign one of them.";
     }
 
     private async void OnCapturePtt(object sender, RoutedEventArgs e)
@@ -150,8 +150,8 @@ public partial class VoiceWindow : Window
             return;
         }
         using var cts = _capture = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        CapturePttButton.Content = "Отмена";
-        PttText.Text = "Нажмите клавишу или кнопку джойстика… (Esc — отмена)";
+        CapturePttButton.Content = "Cancel";
+        PttText.Text = "Press a key or joystick button… (Esc to cancel)";
         PttWarning.Text = "";
         try
         {
@@ -165,7 +165,7 @@ public partial class VoiceWindow : Window
         finally
         {
             _capture = null;
-            CapturePttButton.Content = "Назначить…";
+            CapturePttButton.Content = "Assign…";
             ShowPtt();
         }
     }
@@ -191,7 +191,7 @@ public partial class VoiceWindow : Window
     {
         if (!int.TryParse(PortBox.Text.Trim(), out var port) || port is < 1 or > 65535)
         {
-            ErrorText.Text = "Порт 1–65535";
+            ErrorText.Text = "Port 1–65535";
             return;
         }
         var frequencies = new List<VoiceFrequency>();
@@ -203,13 +203,13 @@ public partial class VoiceWindow : Window
             if (text.Length == 0) continue;
             if (!Frequency.TryParse(text, out var khz))
             {
-                ErrorText.Text = $"Частота «{text}»: нужна 118.000–136.975";
+                ErrorText.Text = $"Frequency \"{text}\": must be 118.000–136.975";
                 row.Frequency.Focus();
                 return;
             }
             if (!seen.Add(khz))
             {
-                ErrorText.Text = $"Частота {Frequency.Format(khz)} уже есть в списке";
+                ErrorText.Text = $"Frequency {Frequency.Format(khz)} is already in the list";
                 row.Frequency.Focus();
                 return;
             }

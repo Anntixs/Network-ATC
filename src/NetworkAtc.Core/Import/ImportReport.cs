@@ -2,7 +2,7 @@ namespace NetworkAtc.Core.Import;
 
 public enum ImportNoteKind { Imported, Skipped, Warning }
 
-/// <summary>One line of an import report, for the "что импортировано / что пропущено" window.</summary>
+/// <summary>One line of an import report, for the "imported / skipped" window.</summary>
 public sealed record ImportNote(ImportNoteKind Kind, string Text)
 {
     public override string ToString() => Kind switch
@@ -27,10 +27,10 @@ public sealed class ImportReport
 
     private IEnumerable<string> Of(ImportNoteKind kind) => Notes.Where(n => n.Kind == kind).Select(n => n.Text);
 
-    /// <summary>"A, B, C и ещё 4" for long lists in one report line.</summary>
+    /// <summary>"A, B, C and 4 more" for long lists in one report line.</summary>
     internal static string Short(IEnumerable<string> items, int max = 10)
     {
         var list = items.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        return list.Count <= max ? string.Join(", ", list) : string.Join(", ", list.Take(max)) + $" и ещё {list.Count - max}";
+        return list.Count <= max ? string.Join(", ", list) : string.Join(", ", list.Take(max)) + $" and {list.Count - max} more";
     }
 }

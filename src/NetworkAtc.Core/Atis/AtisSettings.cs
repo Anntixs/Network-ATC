@@ -18,7 +18,7 @@ public sealed class AtisSettings
     /// <summary>Optional part between the airport and _ATIS: "A" (arrival) makes UUEE_A_ATIS.</summary>
     public string Suffix { get; set; } = "";
     public string Frequency { get; set; } = "";
-    /// <summary>The airport's spoken name, e.g. "Шереметьево" (the ICAO code when empty).</summary>
+    /// <summary>The airport's spoken name, e.g. "Sheremetyevo" (the ICAO code when empty).</summary>
     public string SpokenName { get; set; } = "";
     /// <summary>Text lines sent to pilots on request; alias variables work, $airport is this ATIS's airport.</summary>
     public List<string> Text { get; set; } = [.. DefaultText];
@@ -28,7 +28,7 @@ public sealed class AtisSettings
     public bool AutoLetter { get; set; } = true;
     public AtisVoiceMode Voice { get; set; } = AtisVoiceMode.Speech;
     /// <summary>"ru" or "en" for the spoken ATIS.</summary>
-    public string Language { get; set; } = "ru";
+    public string Language { get; set; } = "en";
     /// <summary>Name of the Windows voice; empty — the first voice of the language.</summary>
     public string SpeechVoice { get; set; } = "";
     /// <summary>Speech rate, -10 (slow) … 10 (fast).</summary>
@@ -38,10 +38,10 @@ public sealed class AtisSettings
 
     public static readonly string[] DefaultText =
     [
-        "$airport ATIS ИНФОРМАЦИЯ $atiscode($airport) $time",
-        "ВПП ВЗЛЁТ $deprwy($airport) ПОСАДКА $arrrwy($airport)",
+        "$airport ATIS INFORMATION $atiscode($airport) $time",
+        "DEPARTURE RWY $deprwy($airport) ARRIVAL RWY $arrrwy($airport)",
         "$metar($airport)",
-        "СООБЩИТЕ О ПОЛУЧЕНИИ ИНФОРМАЦИИ $atiscode($airport)",
+        "ADVISE ON INITIAL CONTACT YOU HAVE INFORMATION $atiscode($airport)",
     ];
 
     public string Callsign => AtisText.Callsign(Airport, Suffix);

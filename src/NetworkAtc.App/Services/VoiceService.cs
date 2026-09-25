@@ -127,7 +127,7 @@ public sealed class VoiceService : IDisposable
             if (ReferenceEquals(_info, info))
             {
                 _lastError = "";
-                Message?.Invoke($"Голосовая связь: подключено ({info.Host}:{port})", false);
+                Message?.Invoke($"Voice: connected ({info.Host}:{port})", false);
             }
             else
             {
@@ -159,7 +159,7 @@ public sealed class VoiceService : IDisposable
         if (state == VoiceState.Disconnected) _heard.Clear();
         if (reason.Length > 0 && _info != null)
         {
-            if (state == VoiceState.Connected) Message?.Invoke("Голосовая связь: " + reason, true); // audio device problem
+            if (state == VoiceState.Connected) Message?.Invoke("Voice: " + reason, true); // audio device problem
             else Fail(reason);
         }
         UpdateRetry();
@@ -170,7 +170,7 @@ public sealed class VoiceService : IDisposable
     {
         if (reason == _lastError) return;
         _lastError = reason;
-        Message?.Invoke($"Голосовая связь недоступна: {reason}. Повтор каждые 30 с, «Переподключить» — в окне РАДИО", true);
+        Message?.Invoke($"Voice unavailable: {reason}. Retrying every 30 s; use Reconnect in the RADIO window", true);
     }
 
     private void UpdateRetry()

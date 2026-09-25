@@ -30,7 +30,7 @@ namespace natc
         // so one broken plugin does not take the host down.
         struct SehError : std::runtime_error
         {
-            explicit SehError(unsigned code) : std::runtime_error("исключение 0x" + [code] {
+            explicit SehError(unsigned code) : std::runtime_error("exception 0x" + [code] {
                 char b[16];
                 snprintf(b, sizeof b, "%08X", code);
                 return std::string(b);
@@ -117,11 +117,11 @@ namespace natc
         }
         catch (const std::exception& e)
         {
-            Log((plugin ? plugin->Name : std::string("?")) + ": ошибка в " + what + ": " + e.what(), true);
+            Log((plugin ? plugin->Name : std::string("?")) + ": error in " + what + ": " + e.what(), true);
         }
         catch (...)
         {
-            Log((plugin ? plugin->Name : std::string("?")) + ": ошибка в " + what, true);
+            Log((plugin ? plugin->Name : std::string("?")) + ": error in " + what, true);
         }
         return false;
     }
@@ -411,13 +411,13 @@ namespace natc
             Send(w);
         };
         for (auto& p : Plugins)
-            if (p->Instance != nullptr && _stricmp(p->Path.c_str(), path.c_str()) == 0) return fail("плагин уже загружен");
+            if (p->Instance != nullptr && _stricmp(p->Path.c_str(), path.c_str()) == 0) return fail("plugin already loaded");
 
         HMODULE module = LoadLibraryExA(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (module == nullptr)
         {
             DWORD e = GetLastError();
-            return fail(e == ERROR_BAD_EXE_FORMAT ? "это не 32-битная DLL" : e == ERROR_MOD_NOT_FOUND ? "не найдена DLL, от которой зависит плагин (например, распространяемый пакет Visual C++ x86)" : "Windows не загрузил DLL, код " + std::to_string(e));
+            return fail(e == ERROR_BAD_EXE_FORMAT ? "not a 32-bit DLL" : e == ERROR_MOD_NOT_FOUND ? "a DLL the plugin depends on was not found (e.g. the Visual C++ x86 redistributable)" : "Windows could not load the DLL, code " + std::to_string(e));
         }
         using InitFn = void (*)(CPlugIn**);
         auto init = reinterpret_cast<InitFn>(GetProcAddress(module, "?EuroScopePlugInInit@@YAXPAPAVCPlugIn@EuroScopePlugIn@@@Z"));
@@ -425,7 +425,7 @@ namespace natc
         if (init == nullptr)
         {
             FreeLibrary(module);
-            return fail("в DLL нет EuroScopePlugInInit — это не плагин EuroScope");
+            return fail("the DLL has no EuroScopePlugInInit, it is not a EuroScope plugin");
         }
 
         auto data = std::make_unique<CPlugInData>();
@@ -443,7 +443,7 @@ namespace natc
         if (!ok || instance == nullptr)
         {
             p->Unloading = true;
-            return fail("плагин не запустился (EuroScopePlugInInit)");
+            return fail("the plugin failed to start (EuroScopePlugInInit)");
         }
         p->Instance = instance;
         if (p->Name.empty()) p->Name = CPlugInData::Of(instance) ? CPlugInData::Of(instance)->Name : path;

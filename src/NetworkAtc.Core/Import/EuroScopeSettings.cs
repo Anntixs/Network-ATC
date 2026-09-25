@@ -298,7 +298,7 @@ public static class EuroScopeTags
         {
             if (type.State is not { } state)
             {
-                skipped.Add($"тип тега «{type.Definition}»");
+                skipped.Add($"tag type \"{type.Definition}\"");
                 continue;
             }
             if (done.Contains(state)) continue;
@@ -315,7 +315,7 @@ public static class EuroScopeTags
                 if (field == null)
                 {
                     var functions = new[] { item.Left, item.Right }.Where(f => f.Length > 0 && ActionOf(f) is null or TagActions.None && f != "0").ToList();
-                    skipped.Add($"элемент тега «{item.Type}»" + (functions.Count > 0 ? $" (функции: {string.Join(", ", functions)})" : ""));
+                    skipped.Add($"tag item \"{item.Type}\"" + (functions.Count > 0 ? $" (functions: {string.Join(", ", functions)})" : ""));
                     continue;
                 }
                 if (!bound.Contains(field) && Bind(profile, field, item, skipped))
@@ -338,12 +338,12 @@ public static class EuroScopeTags
             var text = lines.Where(l => l.Count > 0).Select(l => string.Join(' ', l)).ToList();
             if (state != EsTagState.Detailed && !text.Any(l => l.Contains("{callsign}")))
             {
-                skipped.Add($"тег «{type.Definition}» без позывного");
+                skipped.Add($"tag \"{type.Definition}\" without a callsign");
                 continue;
             }
             if (text.Count == 0)
             {
-                skipped.Add($"тег «{type.Definition}»: нет полей сверх обычного тега");
+                skipped.Add($"tag \"{type.Definition}\": no fields beyond the normal tag");
                 continue;
             }
             string layout = string.Join('\n', text);
@@ -361,8 +361,8 @@ public static class EuroScopeTags
     private static bool Bind(Profile profile, string field, EsTagItem item, List<string> skipped)
     {
         string? left = ActionOf(item.Left), right = ActionOf(item.Right);
-        if (left == null) skipped.Add($"функция «{item.Left}»");
-        if (right == null) skipped.Add($"функция «{item.Right}»");
+        if (left == null) skipped.Add($"function \"{item.Left}\"");
+        if (right == null) skipped.Add($"function \"{item.Right}\"");
         if (left is null or TagActions.None && right is null or TagActions.None) return false;
         var current = profile.TagClicks.GetValueOrDefault(field) ?? new TagClickBinding();
         profile.TagClicks[field] = new TagClickBinding(

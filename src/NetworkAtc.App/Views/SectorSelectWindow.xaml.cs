@@ -12,7 +12,7 @@ public partial class SectorSelectWindow : Window
     private sealed record RecentItem(RecentSector Sector, bool Exists)
     {
         public string Name => string.IsNullOrWhiteSpace(Sector.Name) ? Path.GetFileNameWithoutExtension(Sector.Path) : Sector.Name;
-        public string Format => Exists ? SectorLoader.Describe(Sector.Path).ToUpperInvariant() : "НЕТ ФАЙЛА";
+        public string Format => Exists ? SectorLoader.Describe(Sector.Path).ToUpperInvariant() : "NO FILE";
         public string Details => $"{Sector.Path} · {Sector.LastUsed.ToLocalTime():dd.MM.yyyy HH:mm}";
     }
 
@@ -47,7 +47,7 @@ public partial class SectorSelectWindow : Window
     {
         if (!File.Exists(path))
         {
-            ErrorText.Text = "Файл не найден: " + path;
+            ErrorText.Text = "File not found: " + path;
             return;
         }
         try
@@ -58,7 +58,7 @@ public partial class SectorSelectWindow : Window
         }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Text.Json.JsonException or UnauthorizedAccessException)
         {
-            ErrorText.Text = "Не удалось открыть сектор: " + e.Message;
+            ErrorText.Text = "Could not open sector: " + e.Message;
             return;
         }
         SelectedPath = path;
@@ -75,12 +75,12 @@ public partial class SectorSelectWindow : Window
 
     private void OnOpenNative(object sender, RoutedEventArgs e)
     {
-        if (Browse("Сектор Network-ATC", "Сектор Network-ATC (*.natc)|*.natc|Все файлы|*.*") is { } path) Choose(path);
+        if (Browse("Network-ATC sector", "Network-ATC sector (*.natc)|*.natc|All files|*.*") is { } path) Choose(path);
     }
 
     private void OnOpenEuroScope(object sender, RoutedEventArgs e)
     {
-        if (Browse("Сектор EuroScope", "Сектор EuroScope (*.sct;*.sct2)|*.sct;*.sct2|Все файлы|*.*") is { } path) Choose(path);
+        if (Browse("EuroScope sector", "EuroScope sector (*.sct;*.sct2)|*.sct;*.sct2|All files|*.*") is { } path) Choose(path);
     }
 
     private void OnDemo(object sender, RoutedEventArgs e) => Choose(DemoPath);
@@ -88,7 +88,7 @@ public partial class SectorSelectWindow : Window
     private void OnOpenRecent(object sender, RoutedEventArgs e)
     {
         if (RecentList.SelectedItem is RecentItem item) Choose(item.Sector.Path);
-        else ErrorText.Text = "Выберите сектор из списка или откройте файл.";
+        else ErrorText.Text = "Pick a sector from the list or open a file.";
     }
 
     private void OnRecentDoubleClick(object sender, MouseButtonEventArgs e)
@@ -108,8 +108,8 @@ public partial class SectorSelectWindow : Window
         if (_current == null) return;
         var dialog = new SaveFileDialog
         {
-            Title = "Экспорт в формат Network-ATC",
-            Filter = "Сектор Network-ATC (*.natc)|*.natc",
+            Title = "Export to Network-ATC format",
+            Filter = "Network-ATC sector (*.natc)|*.natc",
             FileName = string.Join("_", (_current.Name.Length > 0 ? _current.Name : "sector").Split(Path.GetInvalidFileNameChars())) + NativeSector.Extension,
         };
         if (dialog.ShowDialog(this) != true) return;
@@ -122,7 +122,7 @@ public partial class SectorSelectWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ErrorText.Text = "Не удалось сохранить: " + ex.Message;
+            ErrorText.Text = "Could not save: " + ex.Message;
         }
     }
 }

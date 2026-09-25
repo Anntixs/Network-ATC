@@ -7,8 +7,8 @@ namespace SamplePlugin;
 /// Shows every extension point of the Network-ATC plugin API:
 ///  - tag field {dist}: distance from a reference airport (clickable: writes distance and bearing to the log);
 ///  - command ".dist AFL123";
-///  - overlay "Кольцо 5 NM": a 5 NM ring around the selected aircraft;
-///  - aircraft menu item "Подсветить" that toggles a highlight color.
+///  - overlay "Ring 5 NM": a 5 NM ring around the selected aircraft;
+///  - aircraft menu item "Highlight" that toggles a highlight color.
 /// </summary>
 public sealed class DistancePlugin : IAtcPlugin
 {
@@ -25,24 +25,24 @@ public sealed class DistancePlugin : IAtcPlugin
     public void Initialize(IPluginHost host)
     {
         _host = host;
-        host.RegisterTagField("dist", "Расстояние до UUEE, NM", a => Distance(a.Position).ToString("0", CultureInfo.InvariantCulture));
+        host.RegisterTagField("dist", "Distance to UUEE, NM", a => Distance(a.Position).ToString("0", CultureInfo.InvariantCulture));
         host.RegisterTagFieldClick("dist", (a, right) =>
-            host.Log($"{a.Callsign}: {Distance(a.Position):0.0} NM до UUEE, курс на UUEE {Bearing(a.Position):000}°"));
-        host.RegisterCommand("dist", "расстояние от борта до UUEE", args =>
+            host.Log($"{a.Callsign}: {Distance(a.Position):0.0} NM to UUEE, bearing to UUEE {Bearing(a.Position):000}°"));
+        host.RegisterCommand("dist", "distance from the aircraft to UUEE", args =>
         {
             var target = args.Count > 0
                 ? host.Aircraft.FirstOrDefault(a => a.Callsign.Equals(args[0], StringComparison.OrdinalIgnoreCase))
                 : host.SelectedAircraft;
-            return target == null ? "Борт не найден" : $"{target.Callsign}: {Distance(target.Position):0.0} NM до UUEE";
+            return target == null ? "Aircraft not found" : $"{target.Callsign}: {Distance(target.Position):0.0} NM to UUEE";
         });
         host.RegisterOverlay(new SelectedRing(host));
-        host.RegisterAircraftAction("Подсветить", a =>
+        host.RegisterAircraftAction("Highlight", a =>
         {
             bool on = _highlighted.Add(a.Callsign);
             if (!on) _highlighted.Remove(a.Callsign);
             host.SetHighlight(a.Callsign, on ? "#F5A524" : null);
         });
-        host.Log("загружен");
+        host.Log("loaded");
     }
 
     private static double Distance(GeoPoint p)
@@ -66,7 +66,7 @@ public sealed class DistancePlugin : IAtcPlugin
 
     private sealed class SelectedRing(IPluginHost host) : IRadarOverlay
     {
-        public string Name => "Кольцо 5 NM";
+        public string Name => "Ring 5 NM";
 
         public void Draw(IRadarCanvas canvas)
         {

@@ -1,7 +1,7 @@
 <Window x:Class="NetworkAtc.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Настройки" Width="920" Height="680" MinWidth="760" MinHeight="520"
+        Title="Settings" Width="920" Height="680" MinWidth="760" MinHeight="520"
         WindowStartupLocation="CenterOwner" Style="{StaticResource AtcWindow}">
   <DockPanel>
     <!-- Footer -->
@@ -9,8 +9,8 @@
       <DockPanel>
         <TextBlock x:Name="ErrorText" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-          <Button Content="Отмена" IsCancel="True" Margin="0,0,8,0"/>
-          <Button Content="Сохранить" IsDefault="True" Style="{StaticResource Primary}" Click="OnSave"/>
+          <Button Content="Cancel" IsCancel="True" Margin="0,0,8,0"/>
+          <Button Content="Save" IsDefault="True" Style="{StaticResource Primary}" Click="OnSave"/>
         </StackPanel>
       </DockPanel>
     </Border>
@@ -18,16 +18,16 @@
     <!-- Navigation -->
     <Border DockPanel.Dock="Left" Width="200" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
       <StackPanel Margin="10,16">
-        <TextBlock Text="Настройки" FontSize="18" FontWeight="SemiBold" Margin="8,0,0,14"/>
+        <TextBlock Text="Settings" FontSize="18" FontWeight="SemiBold" Margin="8,0,0,14"/>
         <ListBox x:Name="Nav" SelectionChanged="OnNavChanged">
-          <ListBoxItem Content="Тема и цвета"/>
-          <ListBoxItem Content="Интерфейс"/>
-          <ListBoxItem Content="Теги"/>
-          <ListBoxItem Content="Цели и карта"/>
-          <ListBoxItem Content="STCA, коды, CLAM"/>
-          <ListBoxItem Content="Горячие клавиши"/>
-          <ListBoxItem Content="Алиасы и ATIS"/>
-          <ListBoxItem Content="Плагины"/>
+          <ListBoxItem Content="Theme and colors"/>
+          <ListBoxItem Content="Interface"/>
+          <ListBoxItem Content="Tags"/>
+          <ListBoxItem Content="Targets and map"/>
+          <ListBoxItem Content="STCA, squawks, CLAM"/>
+          <ListBoxItem Content="Hotkeys"/>
+          <ListBoxItem Content="Aliases and ATIS"/>
+          <ListBoxItem Content="Plugins"/>
         </ListBox>
       </StackPanel>
     </Border>
@@ -36,19 +36,19 @@
       <Grid Margin="28,20,28,20">
         <!-- 0: theme -->
         <StackPanel x:Name="Page0">
-          <TextBlock Text="Тема и цвета" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="Каждый цвет радара и интерфейса можно изменить. Тема сохраняется в профиле и экспортируется в JSON." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-          <TextBlock Text="ПРОФИЛЬ" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Theme and colors" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="Every radar and interface color can be changed. The theme is saved in the profile and can be exported to JSON." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+          <TextBlock Text="PROFILE" Style="{StaticResource SectionTitle}"/>
           <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="260" HorizontalAlignment="Left"/>
-          <TextBlock Text="ГОТОВЫЕ ТЕМЫ" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="PRESET THEMES" Style="{StaticResource SectionTitle}"/>
           <StackPanel Orientation="Horizontal">
             <ComboBox x:Name="PresetBox" Width="200" DisplayMemberPath="Name"/>
-            <Button Content="Применить" Margin="8,0,0,0" Click="OnApplyPreset"/>
-            <Button Content="Импорт…" Click="OnImportTheme"/>
-            <Button Content="Экспорт…" Click="OnExportTheme"/>
+            <Button Content="Apply" Margin="8,0,0,0" Click="OnApplyPreset"/>
+            <Button Content="Import…" Click="OnImportTheme"/>
+            <Button Content="Export…" Click="OnExportTheme"/>
           </StackPanel>
-          <CheckBox Content="Цвета карты брать из файла сектора (#define)" IsChecked="{Binding UseSectorFileColors}" Margin="0,12,0,0"/>
-          <TextBlock Text="ЦВЕТА" Style="{StaticResource SectionTitle}"/>
+          <CheckBox Content="Take map colors from the sector file (#define)" IsChecked="{Binding UseSectorFileColors}" Margin="0,12,0,0"/>
+          <TextBlock Text="COLORS" Style="{StaticResource SectionTitle}"/>
           <ItemsControl x:Name="ColorList">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
@@ -70,31 +70,31 @@
 
         <!-- 1: interface -->
         <StackPanel x:Name="Page1" Visibility="Collapsed" MaxWidth="520" HorizontalAlignment="Left">
-          <TextBlock Text="Интерфейс" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="Размер шрифта интерфейса" Style="{StaticResource FieldLabel}"/>
+          <TextBlock Text="Interface" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="Interface font size" Style="{StaticResource FieldLabel}"/>
           <TextBox Text="{Binding Panels.UiFontSize}"/>
-          <TextBlock Text="Масштаб интерфейса (1 = 100 %)" Style="{StaticResource FieldLabel}"/>
+          <TextBlock Text="Interface scale (1 = 100 %)" Style="{StaticResource FieldLabel}"/>
           <TextBox Text="{Binding Panels.UiScale}"/>
-          <TextBlock Text="Активные аэродромы (через пробел)" Style="{StaticResource FieldLabel}"/>
-          <TextBox x:Name="AirportsBox" CharacterCasing="Upper" ToolTip="Списки вылета и прилёта строятся по этим аэродромам; то же — команда .airport"/>
-          <CheckBox Content="Окно выбора сектора при запуске" IsChecked="{Binding ShowSectorSelection}" Margin="0,14,0,0"/>
-          <CheckBox Content="Открывать план полёта при выборе борта" IsChecked="{Binding Panels.ShowFlightPlan}"/>
-          <CheckBox x:Name="ResetWindowsBox" Content="Расставить окна списков по умолчанию" Margin="0,14,0,0"/>
-          <CheckBox Content="Загружать METAR активных аэродромов (aviationweather.gov)" IsChecked="{Binding FetchMetar}" Margin="0,8,0,0"/>
+          <TextBlock Text="Active airports (space-separated)" Style="{StaticResource FieldLabel}"/>
+          <TextBox x:Name="AirportsBox" CharacterCasing="Upper" ToolTip="Departure and arrival lists are built from these airports; same as the .airport command"/>
+          <CheckBox Content="Sector selection window at startup" IsChecked="{Binding ShowSectorSelection}" Margin="0,14,0,0"/>
+          <CheckBox Content="Open flight plan when selecting an aircraft" IsChecked="{Binding Panels.ShowFlightPlan}"/>
+          <CheckBox x:Name="ResetWindowsBox" Content="Reset list window layout" Margin="0,14,0,0"/>
+          <CheckBox Content="Fetch METAR for active airports (aviationweather.gov)" IsChecked="{Binding FetchMetar}" Margin="0,8,0,0"/>
 
-          <TextBlock Text="ЗВУКИ" Style="{StaticResource SectionTitle}"/>
-          <CheckBox Content="Звуки включены" IsChecked="{Binding Sounds.Enabled}" FontWeight="SemiBold"/>
+          <TextBlock Text="SOUNDS" Style="{StaticResource SectionTitle}"/>
+          <CheckBox Content="Sounds enabled" IsChecked="{Binding Sounds.Enabled}" FontWeight="SemiBold"/>
           <UniformGrid Columns="2" Margin="0,4,0,0">
-            <CheckBox Content="Сообщение на частоте" IsChecked="{Binding Sounds.RadioMessage}"/>
-            <CheckBox Content="Личное сообщение" IsChecked="{Binding Sounds.PrivateMessage}"/>
-            <CheckBox Content="Вам передают борт" IsChecked="{Binding Sounds.HandoffRequest}"/>
-            <CheckBox Content="Передачу приняли" IsChecked="{Binding Sounds.HandoffAccepted}"/>
-            <CheckBox Content="Передачу отклонили" IsChecked="{Binding Sounds.HandoffRefused}"/>
+            <CheckBox Content="Frequency message" IsChecked="{Binding Sounds.RadioMessage}"/>
+            <CheckBox Content="Private message" IsChecked="{Binding Sounds.PrivateMessage}"/>
+            <CheckBox Content="Incoming handoff" IsChecked="{Binding Sounds.HandoffRequest}"/>
+            <CheckBox Content="Handoff accepted" IsChecked="{Binding Sounds.HandoffAccepted}"/>
+            <CheckBox Content="Handoff refused" IsChecked="{Binding Sounds.HandoffRefused}"/>
             <CheckBox Content="Point-out" IsChecked="{Binding Sounds.PointOut}"/>
-            <CheckBox Content="Конфликт (STCA)" IsChecked="{Binding Sounds.ConflictAlert}"/>
-            <CheckBox Content="Подключение / отключение" IsChecked="{Binding Sounds.Connection}"/>
+            <CheckBox Content="Conflict (STCA)" IsChecked="{Binding Sounds.ConflictAlert}"/>
+            <CheckBox Content="Connect / disconnect" IsChecked="{Binding Sounds.Connection}"/>
           </UniformGrid>
-          <TextBlock Text="Громкость (0–1)" Style="{StaticResource FieldLabel}"/>
+          <TextBlock Text="Volume (0–1)" Style="{StaticResource FieldLabel}"/>
           <Slider Minimum="0" Maximum="1" Value="{Binding Sounds.Volume}" Width="220" HorizontalAlignment="Left"/>
         </StackPanel>
 
@@ -106,43 +106,43 @@
             <ColumnDefinition Width="250"/>
           </Grid.ColumnDefinitions>
           <StackPanel>
-            <TextBlock Text="Теги" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock Text="Поля пишутся в фигурных скобках: {callsign}. {cfl|---} покажет «---», если поле пустое. Каждая строка шаблона — строка тега." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-            <TextBlock Text="Борт без сопровождения" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="Tags" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Text="Fields go in curly braces: {callsign}. {cfl|---} shows &quot;---&quot; when the field is empty. Each template line is a tag line." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            <TextBlock Text="Untracked aircraft" Style="{StaticResource FieldLabel}"/>
             <TextBox Text="{Binding Tags.Untracked, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="54" FontFamily="{StaticResource MonoFont}" TextChanged="OnTagChanged" VerticalContentAlignment="Top"/>
-            <TextBlock Text="Борт на сопровождении" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="Tracked aircraft" Style="{StaticResource FieldLabel}"/>
             <TextBox Text="{Binding Tags.Tracked, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="70" FontFamily="{StaticResource MonoFont}" TextChanged="OnTagChanged" VerticalContentAlignment="Top"/>
-            <TextBlock Text="Строки при наведении мыши (добавляются снизу)" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="Lines on mouse hover (appended below)" Style="{StaticResource FieldLabel}"/>
             <TextBox Text="{Binding Tags.Detailed, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="86" FontFamily="{StaticResource MonoFont}" TextChanged="OnTagChanged" VerticalContentAlignment="Top"/>
-            <CheckBox Content="Предупреждения (EMERG, CLAM, DUPE, SQ) над тегом" IsChecked="{Binding Tags.ShowWarnings}" Margin="0,8,0,0"/>
+            <CheckBox Content="Warnings (EMERG, CLAM, DUPE, SQ) above the tag" IsChecked="{Binding Tags.ShowWarnings}" Margin="0,8,0,0"/>
             <UniformGrid Columns="2" Margin="0,4,0,0">
               <StackPanel Margin="0,0,8,0">
-                <TextBlock Text="Шрифт" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Font" Style="{StaticResource FieldLabel}"/>
                 <TextBox Text="{Binding Tags.FontFamily}"/>
               </StackPanel>
               <StackPanel Margin="8,0,0,0">
-                <TextBlock Text="Размер" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Size" Style="{StaticResource FieldLabel}"/>
                 <TextBox Text="{Binding Tags.FontSize}"/>
               </StackPanel>
               <StackPanel Margin="0,0,8,0">
-                <TextBlock Text="Смещение X" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Offset X" Style="{StaticResource FieldLabel}"/>
                 <TextBox Text="{Binding Tags.DefaultOffsetX}"/>
               </StackPanel>
               <StackPanel Margin="8,0,0,0">
-                <TextBlock Text="Смещение Y" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Offset Y" Style="{StaticResource FieldLabel}"/>
                 <TextBox Text="{Binding Tags.DefaultOffsetY}"/>
               </StackPanel>
             </UniformGrid>
-            <CheckBox Content="Линия от цели к тегу" IsChecked="{Binding Tags.ShowTagLeader}" Margin="0,12,0,0"/>
-            <TextBlock Text="ЩЕЛЧКИ ПО ПОЛЯМ ТЕГА" Style="{StaticResource SectionTitle}"/>
-            <TextBlock Text="Что делает левый и правый щелчок по каждому полю формуляра." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <CheckBox Content="Leader line from target to tag" IsChecked="{Binding Tags.ShowTagLeader}" Margin="0,12,0,0"/>
+            <TextBlock Text="TAG FIELD CLICKS" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Text="What a left and right click does on each tag field." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"/>
             <Grid Margin="0,0,0,4">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="110"/><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/>
               </Grid.ColumnDefinitions>
-              <TextBlock Text="Поле" Style="{StaticResource Muted}"/>
-              <TextBlock Grid.Column="1" Text="Левый щелчок" Style="{StaticResource Muted}"/>
-              <TextBlock Grid.Column="3" Text="Правый щелчок" Style="{StaticResource Muted}"/>
+              <TextBlock Text="Field" Style="{StaticResource Muted}"/>
+              <TextBlock Grid.Column="1" Text="Left click" Style="{StaticResource Muted}"/>
+              <TextBlock Grid.Column="3" Text="Right click" Style="{StaticResource Muted}"/>
             </Grid>
             <ItemsControl x:Name="ClickList">
               <ItemsControl.ItemTemplate>
@@ -158,14 +158,14 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button Content="Сбросить щелчки по умолчанию" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnResetClicks"/>
-            <TextBlock Text="ПРЕДПРОСМОТР" Style="{StaticResource SectionTitle}"/>
+            <Button Content="Reset clicks to defaults" HorizontalAlignment="Left" Margin="0,6,0,0" Click="OnResetClicks"/>
+            <TextBlock Text="PREVIEW" Style="{StaticResource SectionTitle}"/>
             <Border Style="{StaticResource Card}" Padding="14,10" Background="{DynamicResource BgBrush}">
               <TextBlock x:Name="TagPreview" FontFamily="{StaticResource MonoFont}" LineHeight="18"/>
             </Border>
           </StackPanel>
           <StackPanel Grid.Column="2">
-            <TextBlock Text="ДОСТУПНЫЕ ПОЛЯ" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
+            <TextBlock Text="AVAILABLE FIELDS" Style="{StaticResource SectionTitle}" Margin="0,0,0,6"/>
             <ItemsControl x:Name="FieldList">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
@@ -181,48 +181,48 @@
 
         <!-- 3: targets and map -->
         <StackPanel x:Name="Page3" Visibility="Collapsed" MaxWidth="560" HorizontalAlignment="Left">
-          <TextBlock Text="Цели и карта" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="ЦЕЛИ" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Targets and map" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="TARGETS" Style="{StaticResource SectionTitle}"/>
           <UniformGrid Columns="3">
             <StackPanel Margin="0,0,8,0">
-              <TextBlock Text="Точек истории" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="History dots" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding Targets.HistoryDots}"/>
             </StackPanel>
             <StackPanel Margin="4,0">
-              <TextBlock Text="Прогноз, мин" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Prediction, min" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding Targets.PredictionMinutes}"/>
             </StackPanel>
             <StackPanel Margin="8,0,0,0">
-              <TextBlock Text="Размер символа" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Symbol size" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding Targets.SymbolSize}"/>
             </StackPanel>
             <StackPanel Margin="0,0,8,0">
-              <TextBlock Text="Фильтр: от, фт" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Filter: from, ft" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding Targets.FilterFloor}"/>
             </StackPanel>
             <StackPanel Margin="4,0">
-              <TextBlock Text="Фильтр: до, фт" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Filter: to, ft" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding Targets.FilterCeiling}"/>
             </StackPanel>
             <StackPanel Margin="8,0,0,0">
-              <TextBlock Text="Эшелон перехода, фт" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Transition altitude, ft" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding TransitionAltitude}"/>
             </StackPanel>
           </UniformGrid>
-          <CheckBox Content="Показывать борты на земле" IsChecked="{Binding Targets.ShowGroundTraffic}" Margin="0,12,0,0"/>
-          <TextBlock Text="КАРТА" Style="{StaticResource SectionTitle}"/>
-          <TextBlock Text="Файл сектора (.natc или .sct)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+          <CheckBox Content="Show ground traffic" IsChecked="{Binding Targets.ShowGroundTraffic}" Margin="0,12,0,0"/>
+          <TextBlock Text="MAP" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Sector file (.natc or .sct)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
           <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Обзор…" Click="OnBrowseSector" Margin="8,0,0,0"/>
+            <Button DockPanel.Dock="Right" Content="Browse…" Click="OnBrowseSector" Margin="8,0,0,0"/>
             <TextBox Text="{Binding SectorFile}"/>
           </DockPanel>
           <UniformGrid Columns="2">
             <StackPanel Margin="0,0,8,0">
-              <TextBlock Text="Шаг колец дальности, NM" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Range ring spacing, NM" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding RangeRingSpacingNm}"/>
             </StackPanel>
             <StackPanel Margin="8,0,0,0">
-              <TextBlock Text="Число колец" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Number of rings" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding RangeRingCount}"/>
             </StackPanel>
           </UniformGrid>
@@ -230,29 +230,29 @@
 
         <!-- 4: STCA -->
         <StackPanel x:Name="Page4" Visibility="Collapsed" MaxWidth="520" HorizontalAlignment="Left">
-          <TextBlock Text="STCA, коды, CLAM" FontSize="20" FontWeight="SemiBold"/>
-          <CheckBox Content="Предупреждение о конфликтах (STCA)" IsChecked="{Binding StcaEnabled}" Margin="0,14,0,0"/>
+          <TextBlock Text="STCA, squawks, CLAM" FontSize="20" FontWeight="SemiBold"/>
+          <CheckBox Content="Conflict alert (STCA)" IsChecked="{Binding StcaEnabled}" Margin="0,14,0,0"/>
           <UniformGrid Columns="2">
             <StackPanel Margin="0,0,8,0">
-              <TextBlock Text="По горизонтали, NM" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Horizontal, NM" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding StcaHorizontalNm}"/>
             </StackPanel>
             <StackPanel Margin="8,0,0,0">
-              <TextBlock Text="По вертикали, фт" Style="{StaticResource FieldLabel}"/>
+              <TextBlock Text="Vertical, ft" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding StcaVerticalFeet}"/>
             </StackPanel>
           </UniformGrid>
-          <TextBlock Text="Диапазон кодов ответчика для .sq" Style="{StaticResource FieldLabel}"/>
+          <TextBlock Text="Squawk range for .sq" Style="{StaticResource FieldLabel}"/>
           <TextBox Text="{Binding SquawkRange}" Width="160" HorizontalAlignment="Left"/>
-          <TextBlock Text="Если у вашей позиции в .ese задан свой диапазон кодов, используется он." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-          <TextBlock Text="CLAM: отклонение от разрешённой высоты, фт" Style="{StaticResource FieldLabel}"/>
+          <TextBlock Text="If your position has its own squawk range in the .ese, that range is used." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+          <TextBlock Text="CLAM: deviation from cleared altitude, ft" Style="{StaticResource FieldLabel}"/>
           <TextBox Text="{Binding ClamFeet}" Width="160" HorizontalAlignment="Left"/>
         </StackPanel>
 
         <!-- 5: keys -->
         <StackPanel x:Name="Page5" Visibility="Collapsed" MaxWidth="560" HorizontalAlignment="Left">
-          <TextBlock Text="Горячие клавиши" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="Щёлкните поле и нажмите нужное сочетание. Backspace — очистить." Style="{StaticResource Muted}" Margin="0,4,0,12"/>
+          <TextBlock Text="Hotkeys" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="Click a field and press the key combination. Backspace clears it." Style="{StaticResource Muted}" Margin="0,4,0,12"/>
           <ItemsControl x:Name="KeyList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
@@ -268,24 +268,24 @@
 
         <!-- 6: aliases -->
         <StackPanel x:Name="Page6" Visibility="Collapsed">
-          <TextBlock Text="Алиасы и информация" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="По одному на строку: .ctc = contact $1 on $2, good day. $1, $2… — слова после алиаса, $cs — выбранный борт." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,12"/>
+          <TextBlock Text="Aliases and info" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="One per line: .ctc = contact $1 on $2, good day. $1, $2… are the words after the alias, $cs is the selected aircraft." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,12"/>
           <TextBox x:Name="AliasBox" AcceptsReturn="True" Height="260" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Top"
                    VerticalScrollBarVisibility="Auto"/>
           <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,0"
-                     Text="Переменные: $aircraft $type $dep $arr $alt $cfl $squawk $route $sid $star $deprwy $arrrwy $calt $nextctr $nextfreq $mycallsign $myfreq $myrealname $myairport $time $metar(UUEE) $wind(UUEE) $qnh(UUEE) $altim(UUEE) $atiscode(UUEE)"/>
-          <TextBlock Text="ИНФОРМАЦИЯ О ДИСПЕТЧЕРЕ" Style="{StaticResource SectionTitle}"/>
-          <TextBlock Text="Пилоты получают эти строки по запросу (как ATIS в EuroScope). Переменные тоже работают." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                     Text="Variables: $aircraft $type $dep $arr $alt $cfl $squawk $route $sid $star $deprwy $arrrwy $calt $nextctr $nextfreq $mycallsign $myfreq $myrealname $myairport $time $metar(UUEE) $wind(UUEE) $qnh(UUEE) $altim(UUEE) $atiscode(UUEE)"/>
+          <TextBlock Text="CONTROLLER INFO" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Pilots receive these lines on request (like the ATIS in EuroScope). Variables work here too." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,6"/>
           <TextBox x:Name="ControllerInfoBox" AcceptsReturn="True" Height="110" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Top"
                    VerticalScrollBarVisibility="Auto"/>
         </StackPanel>
 
         <!-- 7: plugins -->
         <StackPanel x:Name="Page7" Visibility="Collapsed">
-          <TextBlock Text="Плагины" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock Text="Плагины — .NET 8 сборки с классом IAtcPlugin в папке plugins. Пример — в репозитории, examples/SamplePlugin." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-          <Button Content="Открыть папку плагинов" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnOpenPluginsFolder"/>
-          <TextBlock Text="ЗАГРУЖЕНЫ" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Plugins" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock Text="Plugins are .NET 8 assemblies with an IAtcPlugin class in the plugins folder. See examples/SamplePlugin in the repository." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+          <Button Content="Open plugins folder" HorizontalAlignment="Left" Margin="0,12,0,0" Click="OnOpenPluginsFolder"/>
+          <TextBlock Text="LOADED" Style="{StaticResource SectionTitle}"/>
           <ItemsControl x:Name="PluginList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>

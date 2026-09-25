@@ -170,7 +170,7 @@ public class CoordinationTests
         Assert.Equal("DEMO_CTR", t.Owner);
         Assert.False(t.IsTracked);
         Assert.Equal(TrackState.Redundant, TrackStates.Of(t, s.Me, true));
-        Assert.Equal("AFL1 на сопровождении у DEMO_CTR", await s.AssumeAsync(t));
+        Assert.Equal("AFL1 is tracked by DEMO_CTR", await s.AssumeAsync(t));
         Assert.Contains(events, e => e.Kind == CoordinationKind.OwnerChanged && e.Peer == "DEMO_CTR");
         s.OnPacket(null, FsdPacket.Parse("$CQDEMO_CTR:@94835:DR:AFL1")!);
         Assert.Equal("", t.Owner);
@@ -309,25 +309,25 @@ public class EuroScopeCommandTests
     public async Task RunwaysSidsAndSquawksFromPositionRange()
     {
         var (cmd, session, profile, ws, sel) = Create();
-        Assert.Equal("UUEE: вылет 24R, посадка 24L", await cmd.ExecuteAsync(".rwy uuee 24R 24L"));
+        Assert.Equal("UUEE: departure 24R, arrival 24L", await cmd.ExecuteAsync(".rwy uuee 24R 24L"));
         Assert.Contains("UUEE", profile.ActiveAirports);
-        Assert.StartsWith("UUEE: ВПП", await cmd.ExecuteAsync(".rwy UUEE 99X"));
+        Assert.StartsWith("UUEE: runways", await cmd.ExecuteAsync(".rwy UUEE 99X"));
         Demo.Pilot(session, "AFL1", 55.97, 37.41, 0, squawk: 2000);
         Demo.Plan(session, "AFL1", "UUEE", "ULLI", "DEMO5 DM100");
         sel.Add(session.Find("AFL1")!);
         Assert.Equal("DEMO1A", ws.ProcedureOf(sel[0]));
         Assert.Equal("24R", ws.RunwayOf(sel[0]));
         Assert.Equal("AFL1: SID DEMO4A", await cmd.ExecuteAsync(".sid demo4a"));
-        Assert.Equal("SID NOPE нет в секторе", await cmd.ExecuteAsync(".sid NOPE"));
-        Assert.Equal("AFL1: SID автоматически (DEMO1A)", await cmd.ExecuteAsync(".sid"));
+        Assert.Equal("SID NOPE is not in the sector", await cmd.ExecuteAsync(".sid NOPE"));
+        Assert.Equal("AFL1: SID automatic (DEMO1A)", await cmd.ExecuteAsync(".sid"));
         // UUEE_APP's own range from the .ese is 4201-4277.
-        Assert.Equal("AFL1: код 4201", await cmd.ExecuteAsync(".sq"));
-        Assert.Equal("AFL1: разрешение получено", await cmd.ExecuteAsync(".clr"));
+        Assert.Equal("AFL1: squawk 4201", await cmd.ExecuteAsync(".sq"));
+        Assert.Equal("AFL1: clearance received", await cmd.ExecuteAsync(".clr"));
         Assert.True(sel[0].ClearanceReceived);
-        Assert.Equal("AFL1: на сопровождении", await cmd.ExecuteAsync(".assume"));
-        Assert.Equal("AFL1: передача DEMO_CTR", await cmd.ExecuteAsync(".ho DEMO_CTR"));
+        Assert.Equal("AFL1: assumed", await cmd.ExecuteAsync(".assume"));
+        Assert.Equal("AFL1: handoff to DEMO_CTR", await cmd.ExecuteAsync(".ho DEMO_CTR"));
         Assert.Equal("DEMO_CTR", sel[0].HandoffTo);
-        Assert.Equal("AFL1: передача отменена", await cmd.ExecuteAsync(".hc"));
+        Assert.Equal("AFL1: handoff cancelled", await cmd.ExecuteAsync(".hc"));
     }
 
     [Fact]
@@ -335,8 +335,8 @@ public class EuroScopeCommandTests
     {
         var (cmd, session, profile, ws, sel) = Create();
         profile.ActiveAirports = ["UUEE"];
-        Assert.Equal("UUEE: информация A", await cmd.ExecuteAsync(".atis UUEE +"));
-        Assert.Equal("UUEE: информация B", await cmd.ExecuteAsync(".atis UUEE +"));
+        Assert.Equal("UUEE: information A", await cmd.ExecuteAsync(".atis UUEE +"));
+        Assert.Equal("UUEE: information B", await cmd.ExecuteAsync(".atis UUEE +"));
         ws.Weather.Set(MetarParser.Parse("UUEE 240930Z 24005KT CAVOK 10/02 Q1017")!);
         Demo.Pilot(session, "AFL1", 55.97, 37.41, 3000, squawk: 4201);
         Demo.Plan(session, "AFL1", "UUEE", "ULLI", "DEMO5 DM100");
@@ -357,8 +357,8 @@ public class EuroScopeCommandTests
         Demo.Pilot(session, "AFL1", 56.0, 37.0, 10000, gs: 300, pbh: Pbh.Encode(0, 0, 90, false));
         Demo.Pilot(session, "SBI2", 56.0, 37.2985, 10000, gs: 300, pbh: Pbh.Encode(0, 0, 270, false));
         var result = await cmd.ExecuteAsync(".sep AFL1 SBI2");
-        Assert.StartsWith("AFL1 → SBI2: 10.0 NM, пеленг 090°", result);
-        Assert.Contains("минимум 0.", result);
+        Assert.StartsWith("AFL1 → SBI2: 10.0 NM, bearing 090°", result);
+        Assert.Contains("closest 0.", result);
     }
 }
 

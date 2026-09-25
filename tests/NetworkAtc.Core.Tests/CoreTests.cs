@@ -172,10 +172,66 @@ public class CommandTests
     }
 
     [Fact]
+    public void OldRussianDefaults_BecomeEnglish()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"natc-profile-{Guid.NewGuid():N}.json");
+        var old = new Profile { Version = 5, ControllerInfo = ["$mycallsign $myfreq", "Информация $atiscode($myairport)", "Мой текст"] };
+        old.Tags.Detailed = "{dep} {dest}\n{scratch|+ заметка}";
+        old.Atis = [new NetworkAtc.Core.Atis.AtisSettings
+        {
+            Airport = "UUEE", Language = "ru",
+            Text = ["$airport ATIS ИНФОРМАЦИЯ $atiscode($airport) $time", "ВПП ВЗЛЁТ $deprwy($airport) ПОСАДКА $arrrwy($airport)",
+                    "$metar($airport)", "СООБЩИТЕ О ПОЛУЧЕНИИ ИНФОРМАЦИИ $atiscode($airport)"],
+        }];
+        old.Save(path);
+        // A file written by the previous version (Save always stamps the current one).
+        File.WriteAllText(path, File.ReadAllText(path).Replace($"\"Version\": {Profile.CurrentVersion}", "\"Version\": 5"));
+        Assert.Contains("\"Version\": 5", File.ReadAllText(path));
+        var p = Profile.Load(path);
+        File.Delete(path);
+        Assert.Equal("{dep} {dest}\n{scratch|+ scratch}", p.Tags.Detailed);
+        Assert.Equal(["$mycallsign $myfreq", "Information $atiscode($myairport)", "Мой текст"], p.ControllerInfo);  // the user's own line stays
+        Assert.Equal(NetworkAtc.Core.Atis.AtisSettings.DefaultText, p.Atis[0].Text);
+        Assert.Equal("en", p.Atis[0].Language);
+        Assert.Equal(Profile.CurrentVersion, p.Version);
+    }
+
+    [Fact]
+    public void EuroScopePlugins_ArePerSector()
+    {
+        // An older profile: its plugins belong to the sector it opens with.
+        var p = new Profile { EsPlugins = [@"C:\ES\UIII\TopSky.dll"], EsDisplayType = "TopSky radar" };
+        Assert.False(p.SwitchPluginsTo(@"C:\sectors\UIII.natc"));
+        Assert.Single(p.EsPlugins);
+
+        // Another sector: none of Irkutsk's plugins, nothing of its display.
+        Assert.True(p.SwitchPluginsTo(@"C:\sectors\UNKR.natc"));
+        Assert.Empty(p.EsPlugins);
+        Assert.Equal("", p.EsDisplayType);
+        p.EsPlugins.Add(@"C:\ES\UNKR\GRplugin.dll");
+
+        // Back to Irkutsk: its plugins return, Krasnoyarsk keeps its own.
+        Assert.True(p.SwitchPluginsTo(@"c:\sectors\uiii.natc"));
+        Assert.Equal([@"C:\ES\UIII\TopSky.dll"], p.EsPlugins);
+        Assert.Equal("TopSky radar", p.EsDisplayType);
+        Assert.False(p.SwitchPluginsTo(@"C:\sectors\UIII.natc"));
+        p.SwitchPluginsTo(@"C:\sectors\UNKR.natc");
+        Assert.Equal([@"C:\ES\UNKR\GRplugin.dll"], p.EsPlugins);
+
+        // A profile import: the new plugins belong to the new sector, the old ones stay with theirs.
+        var imported = p.Clone();
+        imported.EsPlugins = [@"C:\ES\UUWV\TopSky.dll"];
+        imported.AssignPluginsTo(@"C:\sectors\UUWV.natc", p);
+        Assert.Equal(@"C:\sectors\UUWV.natc", imported.PluginsSector);
+        imported.SwitchPluginsTo(@"C:\sectors\UNKR.natc");
+        Assert.Equal([@"C:\ES\UNKR\GRplugin.dll"], imported.EsPlugins);
+    }
+
+    [Fact]
     public async Task Wallop_NeedsTextAndIncomingCallsAreMarked()
     {
         var (cmd, session, _, _, _) = Create();
-        Assert.StartsWith("Пример", await cmd.ExecuteAsync(".wallop"));
+        Assert.StartsWith("Example", await cmd.ExecuteAsync(".wallop"));
         var messages = new List<AtcMessage>();
         session.MessageReceived += (_, m) => messages.Add(m);
         session.OnPacket(null, FsdPacket.Parse("#TMAFL1:*S:need help with AFL2")!);
@@ -188,20 +244,20 @@ public class CommandTests
     public async Task AnnotatesSelectedAircraft()
     {
         var (cmd, session, _, _, sel) = Create();
-        Assert.Equal("Сначала выберите борт на радаре", await cmd.ExecuteAsync(".cfl 350"));
+        Assert.Equal("Select an aircraft on the radar first", await cmd.ExecuteAsync(".cfl 350"));
         session.OnPacket(null, FsdPacket.Parse("@N:AFL1:4101:1:55.9:37.4:5000:250:0:0")!);
         sel.Add(session.Find("AFL1")!);
 
         Assert.Equal("AFL1: CFL F350", await cmd.ExecuteAsync(".cfl 350"));
         Assert.Equal(35000, sel[0].ClearedAltitude);
         Assert.Equal("AFL1: CFL A045", await cmd.ExecuteAsync(".cfl A045"));
-        Assert.Equal("AFL1: курс 270", await cmd.ExecuteAsync(".hdg 270"));
+        Assert.Equal("AFL1: heading 270", await cmd.ExecuteAsync(".hdg 270"));
         // 4101 is in use by AFL1 itself, so the next free code is handed out.
-        Assert.Equal("AFL1: код 4102", await cmd.ExecuteAsync(".sq"));
-        Assert.Equal("Код — 4 цифры от 0 до 7", await cmd.ExecuteAsync(".sq 4181"));
-        Assert.Equal("AFL1: на сопровождении", await cmd.ExecuteAsync(".track"));
+        Assert.Equal("AFL1: squawk 4102", await cmd.ExecuteAsync(".sq"));
+        Assert.Equal("Squawk: 4 digits from 0 to 7", await cmd.ExecuteAsync(".sq 4181"));
+        Assert.Equal("AFL1: assumed", await cmd.ExecuteAsync(".track"));
         Assert.True(sel[0].IsTracked);
-        Assert.StartsWith("Неизвестная команда", await cmd.ExecuteAsync(".nope"));
+        Assert.StartsWith("Unknown command", await cmd.ExecuteAsync(".nope"));
     }
 
     [Fact]
@@ -272,7 +328,7 @@ public class PluginTests
         Assert.Equal("Sample: distance", plugin.Plugin.Name);
         var error = Assert.Single(manager.Errors);
         Assert.EndsWith("EuroScopePlugin.dll", error.File);
-        Assert.Contains(logs, l => l.Contains("загружен"));
+        Assert.Contains(logs, l => l.Contains("loaded"));
         Assert.Single(registry.Overlays);
         Assert.Single(registry.AircraftActions);
         Assert.True(registry.TagClicks.ContainsKey("dist"));
@@ -281,7 +337,7 @@ public class PluginTests
         selected = session.Find("AFL1");
         Assert.Equal(["18"], TagTemplate.Parse("{dist}").Render(selected!, fields));
         var cmd = new CommandProcessor(session, () => new Profile(), registry, () => selected);
-        Assert.Equal("AFL1: 18.0 NM до UUEE", await cmd.ExecuteAsync(".dist"));
+        Assert.Equal("AFL1: 18.0 NM to UUEE", await cmd.ExecuteAsync(".dist"));
 
         registry.AircraftActions[0].Action(selected!);
         Assert.Equal("#F5A524", selected!.Highlight);
@@ -306,12 +362,12 @@ public class DemoTests
     {
         var session = new AtcSession();
         var cmd = new CommandProcessor(session, () => new Profile(), new PluginRegistry(), () => null);
-        Assert.StartsWith("Демо-трафик включён", await cmd.ExecuteAsync(".demo"));
+        Assert.StartsWith("Demo traffic on", await cmd.ExecuteAsync(".demo"));
         await Task.Delay(300);
         Assert.Equal(10, session.Tracks.Count);
         Assert.All(session.Tracks, t => Assert.True(t.HasFlightPlan));
         Assert.Contains(new Stca().Check(session.Tracks), c => c.A.Callsign.StartsWith("AFL900") || c.B.Callsign.StartsWith("AFL900"));
-        Assert.Equal("Демо-трафик выключен", await cmd.ExecuteAsync(".demo"));
+        Assert.Equal("Demo traffic off", await cmd.ExecuteAsync(".demo"));
         Assert.Empty(session.Tracks);
     }
 }
@@ -418,7 +474,7 @@ public class NativeSectorTests
         var s = SectorLoader.Load(Demo(".natc"));
         Assert.Equal("Network-ATC", SectorLoader.Describe(Demo(".natc")));
         var custom = Assert.Single(s.CustomLayers);
-        Assert.Equal("Зона ожидания DEMO5", custom);
+        Assert.Equal("Holding DEMO5", custom);
         Assert.Equal("#C08A3E", s.LayerColors[custom]);
         Assert.Equal(4, s.Lines[custom].Count);
         Assert.Equal(5, s.Positions.Count);
@@ -457,7 +513,7 @@ public class TrafficListTests
         };
         var deps = TrafficLists.Departures(tracks, ["UUEE"], sector);
         Assert.Equal(["TAXI2", "GATE1"], deps.Select(d => d.Callsign));
-        Assert.Equal("руление", deps[0].Status);
+        Assert.Equal("taxiing", deps[0].Status);
 
         var arrs = TrafficLists.Arrivals(tracks, ["uuee"], sector);
         Assert.Equal(["ARR4", "ARR5"], arrs.Select(a => a.Callsign));
@@ -470,9 +526,9 @@ public class TrafficListTests
     {
         var profile = new Profile();
         var cmd = new CommandProcessor(new AtcSession(), () => profile, new PluginRegistry(), () => null);
-        Assert.Equal("Активные аэродромы: UUEE UUDD", await cmd.ExecuteAsync(".airport uuee UUDD"));
+        Assert.Equal("Active airports: UUEE UUDD", await cmd.ExecuteAsync(".airport uuee UUDD"));
         Assert.Equal(["UUEE", "UUDD"], profile.ActiveAirports);
-        Assert.StartsWith("Коды аэродромов", await cmd.ExecuteAsync(".airport SVO"));
+        Assert.StartsWith("Airport codes", await cmd.ExecuteAsync(".airport SVO"));
     }
 }
 

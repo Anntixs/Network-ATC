@@ -30,12 +30,12 @@ public static class TrackStates
 
     public static string Title(TrackState s) => s switch
     {
-        TrackState.NotConcerned => "не касается",
-        TrackState.Concerned => "касается",
-        TrackState.Assumed => "на сопровождении",
-        TrackState.TransferToMe => "передают мне",
-        TrackState.TransferFromMe => "передаю",
-        TrackState.Redundant => "у другого диспетчера",
+        TrackState.NotConcerned => "not concerned",
+        TrackState.Concerned => "concerned",
+        TrackState.Assumed => "assumed",
+        TrackState.TransferToMe => "transfer to me",
+        TrackState.TransferFromMe => "transfer from me",
+        TrackState.Redundant => "tracked by another controller",
         _ => "",
     };
 }

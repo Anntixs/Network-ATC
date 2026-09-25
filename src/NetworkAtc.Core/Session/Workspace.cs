@@ -143,7 +143,7 @@ public sealed class Workspace : IDisposable
             double? entry = state == TrackState.TransferToMe ? 0 : MinutesToEntry(t);
             if (entry == null) continue;
             string other = t.Owner.Length > 0 ? ShortName(t.Owner) : "—";
-            string info = state == TrackState.TransferToMe ? "ПЕРЕДАЧА" : entry < 0.5 ? "в секторе" : $"через {entry:0} мин";
+            string info = state == TrackState.TransferToMe ? "HANDOFF" : entry < 0.5 ? "in sector" : $"in {entry:0} min";
             rows.Add((new SectorListRow(t, t.Callsign, other, Level(t, formatLevel), info), state == TrackState.TransferToMe ? -1 : entry.Value));
         }
         return rows.OrderBy(r => r.Order).ThenBy(r => r.Row.Callsign).Select(r => r.Row).ToList();
@@ -160,7 +160,7 @@ public sealed class Workspace : IDisposable
             if (t.HandoffPending)
             {
                 other = "→" + ShortName(t.HandoffTo);
-                info = "ПЕРЕДАН";
+                info = "TRANSFERRED";
             }
             else
             {
@@ -169,7 +169,7 @@ public sealed class Workspace : IDisposable
             }
             rows.Add(new SectorListRow(t, t.Callsign, other, Level(t, formatLevel), info));
         }
-        return rows.OrderByDescending(r => r.Info == "ПЕРЕДАН").ThenBy(r => r.Callsign).ToList();
+        return rows.OrderByDescending(r => r.Info == "TRANSFERRED").ThenBy(r => r.Callsign).ToList();
     }
 
     /// <summary>Minutes until the aircraft enters airspace we own (0 when already inside), or null.</summary>

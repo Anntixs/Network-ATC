@@ -2,7 +2,7 @@
   "format": "network-atc-sector",
   "version": 1,
   "info": {
-    "name": "Network-ATC demo (UUEE, формат Network-ATC)",
+    "name": "Network-ATC demo (UUEE, Network-ATC format)",
     "defaultCallsign": "UUEE_DEL",
     "defaultAirport": "UUEE",
     "center": [
@@ -330,7 +330,7 @@
       ]
     },
     {
-      "name": "Зона ожидания DEMO5",
+      "name": "Holding DEMO5",
       "color": "#C08A3E",
       "lines": [
         {

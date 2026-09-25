@@ -21,7 +21,7 @@ public sealed class EuroScopeImportResult
     /// <summary>ASR files by fast key (resolved paths); the first one was imported.</summary>
     public List<string> AsrFiles { get; } = [];
     /// <summary>Map layers made from plugin data (TopSky maps and areas, Ground Radar stands and maps).</summary>
-    public SectorFile Maps { get; } = new() { Name = "Карты плагинов" };
+    public SectorFile Maps { get; } = new() { Name = "Plugin maps" };
     /// <summary>Settings from the EuroScope settings files that have no counterpart ("file: key").</summary>
     public List<string> SkippedSettings { get; } = [];
     public ImportReport Report { get; } = new();
@@ -65,7 +65,7 @@ public static class EuroScopeImport
     /// <summary>Only a missing or unreadable .prf throws; problems with the files it refers to are reported.</summary>
     public static EuroScopeImportResult Import(string prfPath, Profile current)
     {
-        if (!File.Exists(prfPath)) throw new FileNotFoundException("Файл профиля EuroScope не найден", prfPath);
+        if (!File.Exists(prfPath)) throw new FileNotFoundException("EuroScope profile file not found", prfPath);
         var prf = EuroScopeProfile.Load(prfPath);
         var profile = current.Clone();
         // The JSON copy loses the case-insensitive keys of the dictionaries.
@@ -89,13 +89,13 @@ public static class EuroScopeImport
         if (asr != null) ApplyAsr(asr, profile, report, Path.GetFileName(result.AsrFiles[0]));
         ImportPlugins(prf, result);
 
-        if (prf.VoiceFile != null) report.Skip("Настройки голосовой связи EuroScope не переносятся: настройте их в окне «Голосовая связь»");
+        if (prf.VoiceFile != null) report.Skip("EuroScope voice settings are not imported: set them up in the Voice window");
         var known = new[] { "sector", "sectorfile", "SettingsfileSYMBOLOGY", "SettingsfileTAGS", "SettingsfileSCREEN", "Settingsfile",
             "SettingsfileGENERAL", "SettingsfileVOICE", "aliasfile", "alias" };
         var unused = prf.Settings.Keys.Where(k => !known.Contains(k, StringComparer.OrdinalIgnoreCase)).ToList();
-        if (unused.Count > 0) report.Skip($"Файлы профиля без аналога: {ImportReport.Short(unused)}");
-        if (prf.Other.Count > 0) report.Skip($"Прочие строки профиля не используются ({prf.Other.Count})");
-        if (prf.HadPassword) report.Skip("Пароль из профиля не импортируется");
+        if (unused.Count > 0) report.Skip($"Profile files with no equivalent: {ImportReport.Short(unused)}");
+        if (prf.Other.Count > 0) report.Skip($"Other profile lines are not used ({prf.Other.Count})");
+        if (prf.HadPassword) report.Skip("The password in the profile is not imported");
 
         if (result.Sector != null && result.Maps.Lines.Count > 0) result.MergeMapsInto(result.Sector);
         return result;
@@ -110,7 +110,7 @@ public static class EuroScopeImport
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            report.Warn($"Не удалось прочитать {Path.GetFileName(path)}: {e.Message}");
+            report.Warn($"Could not read {Path.GetFileName(path)}: {e.Message}");
             return null;
         }
     }
@@ -123,7 +123,7 @@ public static class EuroScopeImport
         resolved = prf.Resolve(raw);
         if (resolved == null)
         {
-            report.Warn($"{what}: файл не найден ({raw})");
+            report.Warn($"{what}: file not found ({raw})");
             return null;
         }
         return ReadFile(resolved, report);
@@ -137,13 +137,13 @@ public static class EuroScopeImport
         string? raw = prf.SectorFile ?? asr?.SectorFile;
         if (raw == null)
         {
-            report.Skip("В профиле не указан файл сектора");
+            report.Skip("The profile has no sector file");
             return;
         }
         var sct = prf.Resolve(raw);
         if (sct == null)
         {
-            report.Warn($"Сектор: файл не найден ({raw})");
+            report.Warn($"Sector: file not found ({raw})");
             return;
         }
         result.SectorPath = sct;
@@ -152,11 +152,11 @@ public static class EuroScopeImport
         try
         {
             result.Sector = SectorParser.LoadFiles(sct, result.EsePath);
-            report.Ok($"Сектор «{result.Sector.Name}»: {Path.GetFileName(sct)}" + (result.EsePath != null ? " + " + Path.GetFileName(result.EsePath) : " (без .ese)"));
+            report.Ok($"Sector \"{result.Sector.Name}\": {Path.GetFileName(sct)}" + (result.EsePath != null ? " + " + Path.GetFileName(result.EsePath) : " (no .ese)"));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            report.Warn($"Сектор {Path.GetFileName(sct)} не прочитан: {e.Message}");
+            report.Warn($"Sector {Path.GetFileName(sct)} could not be read: {e.Message}");
         }
     }
 
@@ -177,52 +177,52 @@ public static class EuroScopeImport
         if (Get("callsign") is { } callsign)
         {
             profile.Station.Callsign = callsign.ToUpperInvariant();
-            done.Add("позывной " + profile.Station.Callsign);
+            done.Add("callsign " + profile.Station.Callsign);
         }
         if (Get("realname") is { } name)
         {
             profile.Connection.RealName = name;
-            done.Add("имя");
+            done.Add("name");
         }
         if (Get("certificate") is { } cid)
         {
             if (EsNames.TryInt(cid, out var id) && id > 0)
             {
                 profile.Connection.Cid = id;
-                done.Add("номер");
+                done.Add("CID");
             }
         }
         if (Get("rating") is { } rating && EsNames.TryInt(rating, out var r) && r is >= 1 and <= 12)
         {
             profile.Station.Rating = r;
-            done.Add("рейтинг");
+            done.Add("rating");
         }
         if (Get("facility") is { } facility && EsNames.TryInt(facility, out var fac) && fac is >= 0 and <= 6)
         {
             profile.Station.Facility = (Facility)fac;
-            done.Add("тип позиции");
+            done.Add("facility type");
         }
         if (Get("range") is { } range && EsNames.TryInt(range, out var vis) && vis > 0)
         {
             profile.Station.VisualRange = vis;
-            done.Add("дальность видимости");
+            done.Add("visibility range");
         }
         if ((Get("frequency") ?? Get("freq")) is { } freq &&
             double.TryParse(freq, NumberStyles.Float, CultureInfo.InvariantCulture, out var mhz) && mhz is >= 118 and < 137)
         {
             profile.Station.Frequency = mhz.ToString("0.000", CultureInfo.InvariantCulture);
-            done.Add("частота");
+            done.Add("frequency");
         }
         if (Get("server") is { } server)
         {
             if (server.Contains('.') && !server.Contains(' '))
             {
                 profile.Connection.Host = server;
-                done.Add("сервер");
+                done.Add("server");
             }
             else
             {
-                report.Skip($"Сервер «{server}» не перенесён: выберите сервер SkyNetwork при подключении");
+                report.Skip($"Server \"{server}\" not imported: choose a SkyNetwork server when connecting");
             }
         }
         var atis = s.Where(kv => kv.Key.StartsWith("atis", StringComparison.OrdinalIgnoreCase) && kv.Value.Length > 0)
@@ -231,11 +231,11 @@ public static class EuroScopeImport
         {
             used += atis.Count;
             profile.ControllerInfo = atis;
-            done.Add($"информация диспетчера ({atis.Count} стр.)");
+            done.Add($"controller info ({atis.Count} lines)");
         }
-        if (done.Count > 0) report.Ok("Последний сеанс: " + string.Join(", ", done));
+        if (done.Count > 0) report.Ok("Last session: " + string.Join(", ", done));
         int rest = s.Count(kv => kv.Value.Length > 0) - used;
-        if (rest > 0) report.Skip($"Параметры последнего сеанса без аналога: {rest}");
+        if (rest > 0) report.Skip($"Last session settings with no equivalent: {rest}");
     }
 
     // ---- symbology ---------------------------------------------------------------------------------
@@ -243,10 +243,10 @@ public static class EuroScopeImport
     private static void ImportSymbology(EuroScopeProfile prf, EuroScopeImportResult result)
     {
         var report = result.Report;
-        var text = ReadReferenced(prf, prf.SymbologyFile, "Симвология", report, out _);
+        var text = ReadReferenced(prf, prf.SymbologyFile, "Symbology", report, out _);
         if (text == null)
         {
-            if (prf.SymbologyFile == null) report.Skip("В профиле нет файла символогии: цвета не изменены");
+            if (prf.SymbologyFile == null) report.Skip("The profile has no symbology file: colors unchanged");
             return;
         }
         var items = EuroScopeSymbology.Parse(text);
@@ -255,25 +255,25 @@ public static class EuroScopeImport
         var unused = EuroScopeSymbology.ApplyTo(items, theme);
         if (items.Count == unused.Count)
         {
-            report.Warn("Симвология: не найдено ни одного известного цвета");
+            report.Warn("Symbology: no known colors found");
             return;
         }
         result.Theme = theme;
         result.Profile.Theme = theme;
-        report.Ok($"Цвета: {items.Count - unused.Count} из {items.Count} элементов символогии → тема «{theme.Name}»");
-        if (unused.Count > 0) report.Skip($"Элементы символогии без аналога: {ImportReport.Short(unused.Select(i => $"{i.Group}:{i.Name}"))}");
+        report.Ok($"Colors: {items.Count - unused.Count} of {items.Count} symbology items → theme \"{theme.Name}\"");
+        if (unused.Count > 0) report.Skip($"Symbology items with no equivalent: {ImportReport.Short(unused.Select(i => $"{i.Group}:{i.Name}"))}");
     }
 
     // ---- tags --------------------------------------------------------------------------------------
 
     private static void ImportTags(EuroScopeProfile prf, EuroScopeAsr? asr, Profile profile, ImportReport report)
     {
-        var text = ReadReferenced(prf, prf.TagsFile, "Теги", report, out _);
+        var text = ReadReferenced(prf, prf.TagsFile, "Tags", report, out _);
         if (text == null) return;
         var families = EuroScopeTags.Parse(text);
         if (families.Count == 0)
         {
-            report.Warn("Теги: в файле нет определений тегов");
+            report.Warn("Tags: the file has no tag definitions");
             return;
         }
         var family = families.FirstOrDefault(f => asr?.TagFamily != null && f.Name.Equals(asr.TagFamily, StringComparison.OrdinalIgnoreCase))
@@ -281,24 +281,24 @@ public static class EuroScopeImport
                      ?? families[0];
         var skipped = new List<string>();
         var states = EuroScopeTags.ApplyTo(family, profile, skipped, out int clicks);
-        string label = family.Name.Length > 0 ? $"семейство «{family.Name}»" : "теги";
+        string label = family.Name.Length > 0 ? $"family \"{family.Name}\"" : "tags";
         if (states.Count > 0)
         {
             var names = states.Select(s => s switch
             {
-                EsTagState.Untracked => "без сопровождения",
-                EsTagState.Tracked => "сопровождаемый",
-                _ => "подробный",
+                EsTagState.Untracked => "untracked",
+                EsTagState.Tracked => "tracked",
+                _ => "detailed",
             });
-            report.Ok($"Теги: {label} → макеты: {string.Join(", ", names)}; действий по щелчку: {clicks}");
+            report.Ok($"Tags: {label} → layouts: {string.Join(", ", names)}; click actions: {clicks}");
         }
         else
         {
-            report.Warn($"Теги: {label} не удалось перенести, оставлены прежние макеты");
+            report.Warn($"Tags: {label} could not be imported, previous layouts kept");
         }
-        if (skipped.Count > 0) report.Skip($"Теги, не перенесено: {ImportReport.Short(skipped)}");
+        if (skipped.Count > 0) report.Skip($"Tags, not imported: {ImportReport.Short(skipped)}");
         var others = families.Where(f => f != family && f.Name.Length > 0).Select(f => f.Name).ToList();
-        if (others.Count > 0) report.Skip($"Другие семейства тегов не импортированы: {ImportReport.Short(others)}");
+        if (others.Count > 0) report.Skip($"Other tag families not imported: {ImportReport.Short(others)}");
     }
 
     // ---- screen and general settings --------------------------------------------------------------
@@ -315,7 +315,7 @@ public static class EuroScopeImport
             }
         }
 
-        foreach (var (raw, what) in new[] { (prf.GeneralFile, "Общие настройки"), (prf.ScreenFile, "Настройки экрана") })
+        foreach (var (raw, what) in new[] { (prf.GeneralFile, "General settings"), (prf.ScreenFile, "Screen settings") })
         {
             var text = ReadReferenced(prf, raw, what, result.Report, out var path);
             if (text != null) Apply(Path.GetFileName(path!), EuroScopeScreenSettings.Parse(text), true);
@@ -325,11 +325,11 @@ public static class EuroScopeImport
 
         var p = result.Profile;
         if (applied.Count > 0)
-            result.Report.Ok($"Настройки: эшелон перехода {p.TransitionAltitude}, точек истории {p.Targets.HistoryDots}, " +
-                             $"линия прогноза {p.Targets.PredictionMinutes.ToString(CultureInfo.InvariantCulture)} мин, " +
-                             $"фильтр высот {p.Targets.FilterFloor}–{p.Targets.FilterCeiling}");
+            result.Report.Ok($"Settings: transition altitude {p.TransitionAltitude}, history dots {p.Targets.HistoryDots}, " +
+                             $"prediction line {p.Targets.PredictionMinutes.ToString(CultureInfo.InvariantCulture)} min, " +
+                             $"altitude filter {p.Targets.FilterFloor}–{p.Targets.FilterCeiling}");
         if (result.SkippedSettings.Count > 0)
-            result.Report.Skip($"Настройки без аналога ({result.SkippedSettings.Count}): " +
+            result.Report.Skip($"Settings with no equivalent ({result.SkippedSettings.Count}): " +
                                ImportReport.Short(result.SkippedSettings.Select(s => s[(s.IndexOf(": ", StringComparison.Ordinal) + 2)..])));
     }
 
@@ -337,12 +337,12 @@ public static class EuroScopeImport
 
     private static void ImportAliases(EuroScopeProfile prf, Profile profile, ImportReport report)
     {
-        var text = ReadReferenced(prf, prf.AliasFile, "Алиасы", report, out _);
+        var text = ReadReferenced(prf, prf.AliasFile, "Aliases", report, out _);
         if (text == null) return;
         var aliases = EuroScopeAliases.Parse(text);
         foreach (var (k, v) in aliases) profile.Aliases[k] = v;
-        if (aliases.Count > 0) report.Ok($"Алиасы: {aliases.Count}");
-        else report.Warn("Алиасы: в файле нет строк вида «.alias текст»");
+        if (aliases.Count > 0) report.Ok($"Aliases: {aliases.Count}");
+        else report.Warn("Aliases: the file has no lines like \".alias text\"");
     }
 
     // ---- ASR ---------------------------------------------------------------------------------------
@@ -355,13 +355,13 @@ public static class EuroScopeImport
             var path = prf.Resolve(raw);
             if (path == null)
             {
-                result.Report.Warn($"ASR (клавиша {key}): файл не найден ({raw})");
+                result.Report.Warn($"ASR (key {key}): file not found ({raw})");
                 continue;
             }
             result.AsrFiles.Add(path);
             if (first != null)
             {
-                result.Report.Skip($"ASR {Path.GetFileName(path)} (клавиша {key}) не импортирован: в профиле Network-ATC один набор слоёв");
+                result.Report.Skip($"ASR {Path.GetFileName(path)} (key {key}) not imported: a Network-ATC profile has one set of layers");
                 continue;
             }
             if (ReadFile(path, result.Report) is { } text) first = EuroScopeAsr.Parse(text);
@@ -376,17 +376,17 @@ public static class EuroScopeImport
         {
             foreach (var layer in EuroScopeAsr.ControlledLayers) profile.Layers[layer] = asr.VisibleLayers.Contains(layer);
             if (asr.VisibleLayers.Contains("LABELS")) profile.Layers["LABELS"] = true;
-            done.Add($"видимость слоёв ({asr.ElementCount} элементов)");
+            done.Add($"layer visibility ({asr.ElementCount} items)");
         }
         if (asr.View() is var (center, scale))
         {
             profile.ViewCenterLatitude = center.Latitude;
             profile.ViewCenterLongitude = center.Longitude;
             profile.ViewNmPerPixel = scale;
-            done.Add("область экрана");
+            done.Add("screen area");
         }
         if (done.Count > 0) report.Ok($"ASR {file}: {string.Join(", ", done)}");
-        else report.Warn($"ASR {file}: нечего перенести");
+        else report.Warn($"ASR {file}: nothing to import");
     }
 
     // ---- plugins -----------------------------------------------------------------------------------
@@ -415,23 +415,23 @@ public static class EuroScopeImport
             if (runs)
             {
                 result.Profile.EsPlugins.Add(dll);
-                report.Ok($"Плагин {file}: будет запущен");
+                report.Ok($"Plugin {file}: will be loaded");
             }
-            else report.Skip($"Плагин {file}: DLL не найдена");
-            result.Profile.ImportedPlugins.Add(lower.StartsWith("topsky") ? $"{file}: карты и зоны"
-                : lower.StartsWith("grplugin") ? $"{file}: стоянки и карты"
-                : lower.StartsWith("ccams") ? $"{file}: диапазон кодов"
-                : runs ? $"{file}: запускается" : $"{file}: DLL не найдена");
+            else report.Skip($"Plugin {file}: DLL not found");
+            result.Profile.ImportedPlugins.Add(lower.StartsWith("topsky") ? $"{file}: maps and areas"
+                : lower.StartsWith("grplugin") ? $"{file}: stands and maps"
+                : lower.StartsWith("ccams") ? $"{file}: squawk range"
+                : runs ? $"{file}: loaded" : $"{file}: DLL not found");
         }
         foreach (var (layer, visible) in visibility) result.Profile.Layers[layer] = visible;
         if (maps.UnknownPoints.Count > 0)
-            report.Warn($"Точки, которых нет в секторе, пропущены в картах плагинов: {ImportReport.Short(maps.UnknownPoints)}");
+            report.Warn($"Points not in the sector were skipped in plugin maps: {ImportReport.Short(maps.UnknownPoints)}");
     }
 
     private static string? PluginFile(string? dir, string name, string plugin, ImportReport report, bool required)
     {
         var path = EuroScopePaths.FindFile(dir, name);
-        if (path == null && required) report.Warn($"{plugin}: нет файла {name}" + (dir == null ? " (папка плагина не найдена)" : ""));
+        if (path == null && required) report.Warn($"{plugin}: no {name} file" + (dir == null ? " (plugin folder not found)" : ""));
         return path;
     }
 
@@ -444,14 +444,14 @@ public static class EuroScopeImport
         if (ReadFile(PluginFile(dir, "TopSkyMaps.txt", name, report, true), report) is { } mapText)
         {
             var stats = TopSkyMaps.Parse(mapText, name, maps, colors, visibility);
-            parts.Add($"{stats.Maps} карт (включено {stats.Active})");
-            if (stats.Conditional > 0) report.Skip($"TopSky: условия включения карт не поддерживаются ({stats.Conditional}), такие карты выключены");
-            if (stats.UnknownKeywords.Count > 0) report.Skip($"TopSky: строки карт без аналога: {ImportReport.Short(stats.UnknownKeywords)}");
+            parts.Add($"{stats.Maps} maps ({stats.Active} on)");
+            if (stats.Conditional > 0) report.Skip($"TopSky: conditional maps are not supported ({stats.Conditional}), such maps are off");
+            if (stats.UnknownKeywords.Count > 0) report.Skip($"TopSky: map lines with no equivalent: {ImportReport.Short(stats.UnknownKeywords)}");
         }
         if (ReadFile(PluginFile(dir, "TopSkyAreas.txt", name, report, false), report) is { } areaText)
-            parts.Add($"{TopSkyAreas.Parse(areaText, name, maps, colors, visibility)} зон (выключены, включите в списке слоёв)");
+            parts.Add($"{TopSkyAreas.Parse(areaText, name, maps, colors, visibility)} areas (off, turn them on in the layer list)");
         if (parts.Count > 0) report.Ok($"TopSky: {string.Join(", ", parts)}");
-        report.Skip("TopSky: сам плагин не работает в Network-ATC, перенесены только карты и зоны");
+        report.Skip("TopSky: the plugin itself does not run in Network-ATC, only its maps and areas were imported");
     }
 
     private static void ImportGroundRadar(string? dir, MapLayerBuilder maps, Dictionary<string, bool> visibility, ImportReport report)
@@ -461,12 +461,12 @@ public static class EuroScopeImport
         if (ReadFile(PluginFile(dir, "GRpluginStands.txt", name, report, true), report) is { } stands)
         {
             var counts = GroundRadarStands.Parse(stands, maps, visibility);
-            if (counts.Count > 0) parts.Add("стоянки " + string.Join(", ", counts.Select(kv => $"{kv.Key} ({kv.Value})")));
+            if (counts.Count > 0) parts.Add("stands " + string.Join(", ", counts.Select(kv => $"{kv.Key} ({kv.Value})")));
         }
         if (ReadFile(PluginFile(dir, "GRpluginMaps.txt", name, report, false), report) is { } mapText)
-            parts.Add($"{TopSkyMaps.Parse(mapText, name, maps, new Dictionary<string, string>(), visibility).Maps} карт");
+            parts.Add($"{TopSkyMaps.Parse(mapText, name, maps, new Dictionary<string, string>(), visibility).Maps} maps");
         if (parts.Count > 0) report.Ok($"{name}: {string.Join(", ", parts)}");
-        report.Skip($"{name}: сам плагин не работает в Network-ATC, перенесены только стоянки и карты");
+        report.Skip($"{name}: the plugin itself does not run in Network-ATC, only its stands and maps were imported");
     }
 
     private static void ImportCcams(string? dir, Profile profile, ImportReport report)
@@ -481,11 +481,11 @@ public static class EuroScopeImport
         if (range != null)
         {
             profile.SquawkRange = range;
-            report.Ok($"CCAMS: диапазон кодов {range}");
+            report.Ok($"CCAMS: squawk range {range}");
         }
         else
         {
-            report.Skip("CCAMS: локальных настроек диапазона кодов нет, используются диапазоны позиций из сектора");
+            report.Skip("CCAMS: no local squawk range settings, the position ranges from the sector are used");
         }
     }
 }

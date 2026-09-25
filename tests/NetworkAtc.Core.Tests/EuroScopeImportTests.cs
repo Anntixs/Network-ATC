@@ -263,7 +263,7 @@ public class EuroScopeImportTests
         Assert.Equal("", result.Profile.Connection.ProtectedPassword);
         Assert.DoesNotContain("secret123", JsonSerializer.Serialize(result.Profile));
         Assert.DoesNotContain(result.Report.Notes, n => n.Text.Contains("secret123"));
-        Assert.Contains(result.Report.Skipped, s => s.Contains("Пароль"));
+        Assert.Contains(result.Report.Skipped, s => s.Contains("password"));
     }
 
     [Fact]
@@ -346,7 +346,7 @@ public class EuroScopeImportTests
         Assert.InRange(p.ViewNmPerPixel, 0.03, 0.1);
         Assert.Contains(result.Report.Skipped, s => s.Contains("TWR.asr"));
         Assert.Contains(result.Report.Warnings, s => s.Contains("Missing.asr"));
-        Assert.Contains(result.Report.Skipped, s => s.Contains("голосовой"));
+        Assert.Contains(result.Report.Skipped, s => s.Contains("voice"));
         Assert.Contains(result.Report.Skipped, s => s.Contains("airlines"));
     }
 
@@ -372,16 +372,16 @@ public class EuroScopeImportTests
         Assert.False(p.Layers["TopSky · UUEE · Off"]);
         Assert.Contains(maps.Labels, l => l.Text == "SHR VOR");
 
-        const string danger = "TopSky · Зоны · DANGER";
+        const string danger = "TopSky · Areas · DANGER";
         Assert.Equal(3, maps.Lines[danger].Count);
         Assert.Equal("#FF0000", maps.LayerColors[danger]);
         Assert.Contains(maps.Labels, l => l is { Text: "UUD1 0–100", Group: danger });
-        Assert.Equal(36, maps.Lines["TopSky · Зоны · RESTRICTED"].Count);
+        Assert.Equal(36, maps.Lines["TopSky · Areas · RESTRICTED"].Count);
         Assert.False(p.Layers[danger]);
 
-        Assert.Contains(result.Report.Imported, s => s.StartsWith("TopSky: 3 карт (включено 1), 2 зон"));
+        Assert.Contains(result.Report.Imported, s => s.StartsWith("TopSky: 3 maps (1 on), 2 areas"));
         Assert.Contains(result.Report.Skipped, s => s.Contains("WEIRDKEY"));
-        Assert.Contains(result.Report.Skipped, s => s.Contains("условия включения"));
+        Assert.Contains(result.Report.Skipped, s => s.Contains("conditional maps"));
         Assert.Contains(result.Report.Warnings, s => s.Contains("UNKNOWNFIX"));
     }
 
@@ -392,16 +392,16 @@ public class EuroScopeImportTests
         var result = Import(package);
         var maps = result.Maps;
 
-        Assert.Equal(24, maps.Lines["Стоянки UUEE"].Count); // two 12-segment circles
-        Assert.Equal(["24", "25"], maps.Labels.Where(l => l.Group == "Стоянки UUEE").Select(l => l.Text));
-        Assert.Equal(3, maps.Lines["Стоянки UUDD"].Count); // outline from COORD lines
-        Assert.True(result.Profile.Layers["Стоянки UUEE"]);
+        Assert.Equal(24, maps.Lines["Stands UUEE"].Count); // two 12-segment circles
+        Assert.Equal(["24", "25"], maps.Labels.Where(l => l.Group == "Stands UUEE").Select(l => l.Text));
+        Assert.Equal(3, maps.Lines["Stands UUDD"].Count); // outline from COORD lines
+        Assert.True(result.Profile.Layers["Stands UUEE"]);
         Assert.Contains(result.Report.Imported, s => s.Contains("UUEE (2)") && s.Contains("UUDD (1)"));
 
         Assert.Equal("4201-4277", result.Profile.SquawkRange);
         // Every plugin DLL found runs in the plugin host, in the .prf order.
         Assert.Equal(["TopSky.dll", "GRplugin.dll", "AmanPlugin.dll", "CCAMS.dll"], result.Profile.EsPlugins.Select(Path.GetFileName));
-        Assert.Contains(result.Report.Imported, s => s == "Плагин AmanPlugin.dll: будет запущен");
+        Assert.Contains(result.Report.Imported, s => s == "Plugin AmanPlugin.dll: will be loaded");
     }
 
     [Fact]
@@ -411,16 +411,16 @@ public class EuroScopeImportTests
         var result = Import(package);
         Assert.Contains("TopSky · UUEE · RWY", result.Sector!.CustomLayers);
         Assert.Contains(result.Sector.Labels, l => l.Text == "SHEREMETYEVO");
-        Assert.Equal(result.Sector.Lines["Стоянки UUEE"].Count, result.Maps.Lines["Стоянки UUEE"].Count);
+        Assert.Equal(result.Sector.Lines["Stands UUEE"].Count, result.Maps.Lines["Stands UUEE"].Count);
 
         var path = Path.Combine(package.Root, "UUWV" + NativeSector.Extension);
         result.SaveNativeSector(path);
         Assert.Equal(path, result.Profile.SectorFile);
         var loaded = NativeSector.Load(path);
         Assert.Equal(8, loaded.Procedures.Count);
-        Assert.Contains("TopSky · Зоны · DANGER", loaded.CustomLayers);
-        Assert.Equal("#FF0000", loaded.LayerColors["TopSky · Зоны · DANGER"]);
-        Assert.Contains(loaded.Labels, l => l is { Text: "24", Group: "Стоянки UUEE" });
+        Assert.Contains("TopSky · Areas · DANGER", loaded.CustomLayers);
+        Assert.Equal("#FF0000", loaded.LayerColors["TopSky · Areas · DANGER"]);
+        Assert.Contains(loaded.Labels, l => l is { Text: "24", Group: "Stands UUEE" });
     }
 
     [Fact]
@@ -469,6 +469,6 @@ public class EuroScopeImportTests
         Assert.Equal("{callsign}\n{fl}", profile.Tags.Tracked);
         Assert.Equal(0, clicks);
         Assert.Equal(Profile.DefaultTagClicks()["callsign"].Left, profile.TagClicks["callsign"].Left);
-        Assert.Contains("элемент тега «unknown thing»", skipped);
+        Assert.Contains("tag item \"unknown thing\"", skipped);
     }
 }

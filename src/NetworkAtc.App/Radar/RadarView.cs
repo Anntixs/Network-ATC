@@ -399,7 +399,7 @@ public sealed class RadarView : FrameworkElement
             if (a.Track is { } ta && b.Track is { } tb && !ReferenceEquals(ta, tb))
             {
                 var (min, minutes) = NetworkAtc.Core.Session.CommandProcessor.ClosestApproach(ta, tb, 20);
-                if (minutes > 0.1) text += $"\nмин {min:0.0} NM · {minutes:0} мин";
+                if (minutes > 0.1) text += $"\nmin {min:0.0} NM · {minutes:0} min";
             }
             DrawSmallText(dc, text, new Point((pa.X + pb.X) / 2 + 6, (pa.Y + pb.Y) / 2 - 6), theme.Measure, 11);
         }

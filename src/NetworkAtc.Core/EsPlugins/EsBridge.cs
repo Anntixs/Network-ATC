@@ -149,7 +149,7 @@ public sealed class EsBridge : IAsyncDisposable
         _functions.Clear();
         _displayTypes.Clear();
         _lists.Clear();
-        if (reason.Length > 0) Log?.Invoke("Плагины EuroScope: " + reason, true);
+        if (reason.Length > 0) Log?.Invoke("EuroScope plugins: " + reason, true);
         Changed?.Invoke();
     }
 
@@ -523,20 +523,20 @@ public sealed class EsBridge : IAsyncDisposable
                 foreach (var (key, item) in _functions.Where(kv => kv.Key.Item1 == p.Id).ToList()) _functions[key] = item with { PluginName = p.Name };
                 foreach (var (key, d) in _displayTypes.Where(kv => kv.Value.PluginId == p.Id).ToList()) _displayTypes[key] = d with { PluginName = p.Name };
                 _plugins[p.Id] = p;
-                Log?.Invoke($"Плагин EuroScope {p.Name} {p.Version} загружен", false);
+                Log?.Invoke($"EuroScope plugin {p.Name} {p.Version} loaded", false);
                 Changed?.Invoke();
                 break;
             }
             case EsMsg.PluginFailed:
             {
                 string path = r.Str(), reason = r.Str();
-                Log?.Invoke($"Плагин {Path.GetFileName(path)} не загружен: {reason}", true);
+                Log?.Invoke($"Plugin {Path.GetFileName(path)} not loaded: {reason}", true);
                 break;
             }
             case EsMsg.PluginUnloaded:
             {
                 int id = r.I32();
-                if (_plugins.TryRemove(id, out var p)) Log?.Invoke($"Плагин {p.Name} выгружен", false);
+                if (_plugins.TryRemove(id, out var p)) Log?.Invoke($"Plugin {p.Name} unloaded", false);
                 foreach (var k in _items.Keys.Where(k => k.Item1 == id).ToList()) _items.TryRemove(k, out _);
                 foreach (var k in _functions.Keys.Where(k => k.Item1 == id).ToList()) _functions.TryRemove(k, out _);
                 foreach (var k in _displayTypes.Where(kv => kv.Value.PluginId == id).Select(kv => kv.Key).ToList()) _displayTypes.TryRemove(k, out _);
@@ -745,12 +745,12 @@ public sealed class EsBridge : IAsyncDisposable
                 AselRequested?.Invoke(t.Callsign);
                 break;
             case EsActionKind.PushStrip:
-                Log?.Invoke($"{callsign}: передача стрипа {a} не поддерживается", false);
+                Log?.Invoke($"{callsign}: strip transfer {a} is not supported", false);
                 break;
             case EsActionKind.InitiateCoordination:
             case EsActionKind.AcceptCoordination:
             case EsActionKind.RefuseCoordination:
-                Log?.Invoke($"{callsign}: координация точки/высоты по запросу плагина пока не поддерживается", false);
+                Log?.Invoke($"{callsign}: point/altitude coordination requested by a plugin is not supported yet", false);
                 break;
         }
         Changed?.Invoke();

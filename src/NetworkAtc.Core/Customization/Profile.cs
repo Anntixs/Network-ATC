@@ -21,14 +21,14 @@ public sealed class TagLayouts
 
     public const string DefaultUntracked = "{callsign} {ho}\n{alt}{vs} {gs10}";
     public const string DefaultTracked = "{callsign} {comm} {ho}\n{alt}{vs} {cfl|---} {ahdg}\n{gs10} {type} {aspd}";
-    public const string DefaultDetailed = "{dep} {dest} {rfl} {squawk}\n{proc|SID/STAR} {rwy} {next}\n{scratch|+ заметка}";
+    public const string DefaultDetailed = "{dep} {dest} {rfl} {squawk}\n{proc|SID/STAR} {rwy} {next}\n{scratch|+ scratch}";
 
     /// <summary>The layouts before EuroScope coordination fields existed (profile version 2).</summary>
     public static readonly string[] OldDefaults =
     [
         "{callsign}\n{fl}{vs}",
         "{callsign} {wtc}\n{fl}{vs} {cfl|---}\n{gs10} {dest} {ahdg} {aspd}",
-        "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{scratch|+ заметка}",
+        "{callsign} {type}/{wtc} {squawk}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{scratch|+ scratch}",
     ];
 
     /// <summary>The defaults of profile versions 3–4 (the detailed tag was a whole separate tag then).</summary>
@@ -36,7 +36,7 @@ public sealed class TagLayouts
     [
         "{warn}\n{callsign} {ho}\n{fl}{vs} {gs10}",
         "{warn}\n{callsign} {comm}{wtc}\n{fl}{vs} {cfl|---} {ho}\n{gs10} {dest} {ahdg} {aspd}",
-        "{warn}\n{callsign} {type}/{wtc} {squawk} {asq}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{proc|SID/STAR} {rwy} {owner|—} {next}\n{scratch|+ заметка}",
+        "{warn}\n{callsign} {type}/{wtc} {squawk} {asq}\n{fl}{vs} {cfl|CFL} {rfl}\n{gs} {ahdg|HDG} {aspd|SPD} {dest}\n{proc|SID/STAR} {rwy} {owner|—} {next}\n{scratch|+ scratch}",
     ];
 
     public double FontSize { get; set; } = 11;
@@ -100,7 +100,7 @@ public sealed class VoiceFrequency
     public double Volume { get; set; } = 1;
 }
 
-/// <summary>Radio voice: frequencies, audio devices, push-to-talk ("Голосовая связь" dialog).</summary>
+/// <summary>Radio voice: frequencies, audio devices, push-to-talk ("Voice" dialog).</summary>
 public sealed class VoiceOptions
 {
     public const int DefaultPort = 3782;
@@ -158,7 +158,7 @@ public sealed class PanelSettings
 public sealed class Profile
 {
     /// <summary>Profile format version, used to migrate old profiles.</summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
     public int Version { get; set; }
 
     public string Name { get; set; } = "Default";
@@ -186,7 +186,7 @@ public sealed class Profile
     /// <summary>The controller's ATIS stations (UUEE_ATIS…): frequency, text, voice.</summary>
     public List<Atis.AtisSettings> Atis { get; set; } = [];
     /// <summary>Controller info (ATIS) lines sent to pilots on request; aliases variables like $atiscode(UUEE) are expanded.</summary>
-    public List<string> ControllerInfo { get; set; } = ["$mycallsign $myfreq", "Информация $atiscode($myairport)"];
+    public List<string> ControllerInfo { get; set; } = ["$mycallsign $myfreq", "Information $atiscode($myairport)"];
     public SoundSettings Sounds { get; set; } = new();
     /// <summary>Load METARs for the active airports from aviationweather.gov.</summary>
     public bool FetchMetar { get; set; } = true;
@@ -197,7 +197,7 @@ public sealed class Profile
     public Dictionary<string, WindowLayout> Windows { get; set; } = DefaultWindows();
 
     public List<RecentSector> RecentSectors { get; set; } = [];
-    /// <summary>EuroScope plugins of the last imported .prf and what became of each (shown in the ПЛАГИНЫ menu).</summary>
+    /// <summary>EuroScope plugins of the last imported .prf and what became of each (shown in the PLUGINS menu).</summary>
     public List<string> ImportedPlugins { get; set; } = [];
     /// <summary>EuroScope plugin DLLs loaded into the plugin host at start, in load order.</summary>
     public List<string> EsPlugins { get; set; } = [];
@@ -205,6 +205,53 @@ public sealed class Profile
     public string EsDisplayType { get; set; } = "";
     /// <summary>Data the plugins saved into the display (the ASR of EuroScope), name → value.</summary>
     public Dictionary<string, string> EsDisplayData { get; set; } = [];
+    /// <summary>Sector the plugin lists above belong to ("" in profiles from before plugins were kept per sector).</summary>
+    public string PluginsSector { get; set; } = "";
+    /// <summary>Plugins of the other sectors, by sector file: each sector (profile of a division) has its own.</summary>
+    public Dictionary<string, SectorPluginSet> SectorPlugins { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    private SectorPluginSet PluginSnapshot() => new()
+    {
+        EsPlugins = [.. EsPlugins],
+        ImportedPlugins = [.. ImportedPlugins],
+        EsDisplayType = EsDisplayType,
+        EsDisplayData = new(EsDisplayData),
+    };
+
+    /// <summary>
+    /// Another sector is opened: the plugins in use are kept for the sector they belong to and the plugins of the
+    /// new sector (none if it never had any) take their place. False when nothing changes.
+    /// </summary>
+    public bool SwitchPluginsTo(string sector)
+    {
+        if (string.Equals(PluginsSector, sector, StringComparison.OrdinalIgnoreCase)) return false;
+        if (PluginsSector.Length == 0)
+        {
+            // An older profile: its plugins belong to the sector it opens with.
+            PluginsSector = sector;
+            return false;
+        }
+        SectorPlugins[PluginsSector] = PluginSnapshot();
+        var next = SectorPlugins.GetValueOrDefault(sector) ?? new SectorPluginSet();
+        EsPlugins = [.. next.EsPlugins];
+        ImportedPlugins = [.. next.ImportedPlugins];
+        EsDisplayType = next.EsDisplayType;
+        EsDisplayData = new(next.EsDisplayData);
+        PluginsSector = sector;
+        return true;
+    }
+
+    /// <summary>
+    /// After a profile import: the plugins now listed belong to <paramref name="sector"/>, and those in use before
+    /// the import (<paramref name="before"/>) stay with their own sector.
+    /// </summary>
+    public void AssignPluginsTo(string sector, Profile before)
+    {
+        if (before.PluginsSector.Length > 0 && !string.Equals(before.PluginsSector, sector, StringComparison.OrdinalIgnoreCase))
+            SectorPlugins[before.PluginsSector] = before.PluginSnapshot();
+        SectorPlugins.Remove(sector);
+        PluginsSector = sector;
+    }
     public bool ShowSectorSelection { get; set; } = true;
 
     public static Dictionary<string, WindowLayout> DefaultWindows() => new(StringComparer.OrdinalIgnoreCase)
@@ -339,6 +386,37 @@ public sealed class Profile
 
     public bool IsLayerVisible(string layer) => !Layers.TryGetValue(layer, out var v) || v;
 
+    /// <summary>
+    /// Version 6: the program is in English. Russian texts that came from the old defaults (untouched by the user)
+    /// become their English defaults; anything the user wrote stays as it is.
+    /// </summary>
+    private static void MigrateToEnglish(Profile p)
+    {
+        if (p.Tags != null)
+        {
+            p.Tags.Untracked = p.Tags.Untracked?.Replace("{scratch|+ заметка}", "{scratch|+ scratch}") ?? TagLayouts.DefaultUntracked;
+            p.Tags.Tracked = p.Tags.Tracked?.Replace("{scratch|+ заметка}", "{scratch|+ scratch}") ?? TagLayouts.DefaultTracked;
+            p.Tags.Detailed = p.Tags.Detailed?.Replace("{scratch|+ заметка}", "{scratch|+ scratch}") ?? TagLayouts.DefaultDetailed;
+        }
+        if (p.ControllerInfo != null)
+            for (int i = 0; i < p.ControllerInfo.Count; i++)
+                if (p.ControllerInfo[i] == "Информация $atiscode($myairport)") p.ControllerInfo[i] = "Information $atiscode($myairport)";
+        string[] oldAtis =
+        [
+            "$airport ATIS ИНФОРМАЦИЯ $atiscode($airport) $time",
+            "ВПП ВЗЛЁТ $deprwy($airport) ПОСАДКА $arrrwy($airport)",
+            "$metar($airport)",
+            "СООБЩИТЕ О ПОЛУЧЕНИИ ИНФОРМАЦИИ $atiscode($airport)",
+        ];
+        foreach (var atis in p.Atis ?? [])
+        {
+            if (atis == null) continue;
+            if (atis.Text != null && atis.Text.SequenceEqual(oldAtis)) atis.Text = [.. NetworkAtc.Core.Atis.AtisSettings.DefaultText];
+            // The spoken ATIS is English now: a Russian voice would read it with a Russian accent.
+            if (atis.Language == "ru") atis.Language = "en";
+        }
+    }
+
     public Profile Clone() => JsonSerializer.Deserialize<Profile>(JsonSerializer.Serialize(this, Json), Json)!;
 
     public static Profile Load(string path)
@@ -359,6 +437,9 @@ public sealed class Profile
                 p.EsPlugins ??= [];
                 p.EsDisplayType ??= "";
                 p.EsDisplayData ??= [];
+                p.PluginsSector ??= "";
+                p.SectorPlugins = new Dictionary<string, SectorPluginSet>(p.SectorPlugins ?? [], StringComparer.OrdinalIgnoreCase);
+                if (p.Version < 6) MigrateToEnglish(p);
                 if (p.Version < 2)
                 {
                     // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).
@@ -421,4 +502,13 @@ public sealed class Profile
         JsonSerializer.Deserialize<Theme>(File.ReadAllText(path), Json) ?? new Theme();
 
     public static void SaveTheme(Theme theme, string path) => File.WriteAllText(path, JsonSerializer.Serialize(theme, Json));
+}
+
+/// <summary>The EuroScope plugins of one sector and what they keep in the display.</summary>
+public sealed class SectorPluginSet
+{
+    public List<string> EsPlugins { get; set; } = [];
+    public List<string> ImportedPlugins { get; set; } = [];
+    public string EsDisplayType { get; set; } = "";
+    public Dictionary<string, string> EsDisplayData { get; set; } = [];
 }
