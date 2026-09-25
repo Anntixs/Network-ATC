@@ -66,6 +66,8 @@ public sealed class TagFields
     public void Add(string key, string description, Func<IAircraft, string> value) =>
         _fields[key] = new TagField(key, description, value);
 
+    public void Remove(string key) => _fields.Remove(key);
+
     public string? Resolve(string key, IAircraft aircraft)
     {
         if (!_fields.TryGetValue(key, out var f)) return null;

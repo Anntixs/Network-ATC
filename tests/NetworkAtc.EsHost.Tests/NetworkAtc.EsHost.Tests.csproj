@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    End-to-end tests of the EuroScope plugin host: they need the 32-bit native build (Windows) in the folder
+    given by NATC_ESBRIDGE_DIR (EuroScopePlugInDll.dll, NetworkAtc.EsHost.exe, TestPlugin.dll). Without it
+    they pass without doing anything, so the Linux job stays green.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\NetworkAtc.Core\NetworkAtc.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\native\EsBridge\exports.txt" Link="exports.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

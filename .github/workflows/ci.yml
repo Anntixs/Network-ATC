@@ -11,6 +11,25 @@ jobs:
       - run: dotnet build NetworkAtc.sln -c Release
       - run: dotnet test tests/NetworkAtc.Core.Tests -c Release --no-build
 
+  # The EuroScope plugin bridge: 32-bit native DLL and host, then the end-to-end tests with the test plugin.
+  esbridge:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build the plugin bridge (Win32)
+        run: |
+          cmake -S native/EsBridge -B build/esbridge -A Win32
+          cmake --build build/esbridge --config Release
+      - name: Plugin host tests
+        shell: pwsh
+        run: |
+          $env:NATC_ESBRIDGE_DIR = "$PWD\build\esbridge\Release"
+          Get-ChildItem $env:NATC_ESBRIDGE_DIR
+          dotnet test tests/NetworkAtc.EsHost.Tests -c Release --logger "console;verbosity=normal"
+
   linux-tests:
     runs-on: ubuntu-latest
     steps:
