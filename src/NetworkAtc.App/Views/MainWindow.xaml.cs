@@ -249,6 +249,8 @@ public partial class MainWindow : Window
             Radar.SetSector(sector);
             _workspace.SetSector(sector);
             _sectorPath = path;
+            // Each sector has its own EuroScope plugins: those of the previous sector are unloaded.
+            if (_profile.SwitchPluginsTo(path)) SyncEsPlugins();
             _es?.SendSector(sector, path);
             _commands.DemoCenter = sector.Center;
             if (sameAsLastTime && _profile.ViewCenterLatitude != 0)
@@ -1378,11 +1380,13 @@ public partial class MainWindow : Window
         {
             result.Report.Warn($"Сектор с картами плагинов не сохранён: {ex.Message}");
         }
+        // The plugins of the imported profile belong to its sector; the ones in use until now stay with theirs.
+        result.Profile.AssignPluginsTo(result.Profile.SectorFile, _profile);
         _profile = result.Profile;
         ApplyProfile();
         LoadSector(_profile.SectorFile);
         SaveProfile();
-        LoadImportedEsPlugins();
+        SyncEsPlugins();
         _dirty = true;
         Info($"Профиль EuroScope «{result.Source.Name}» импортирован: {result.Report.Imported.Count()} импортировано, " +
              $"{result.Report.Skipped.Count()} пропущено, {result.Report.Warnings.Count()} предупреждений");

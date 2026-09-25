@@ -205,6 +205,53 @@ public sealed class Profile
     public string EsDisplayType { get; set; } = "";
     /// <summary>Data the plugins saved into the display (the ASR of EuroScope), name → value.</summary>
     public Dictionary<string, string> EsDisplayData { get; set; } = [];
+    /// <summary>Sector the plugin lists above belong to ("" in profiles from before plugins were kept per sector).</summary>
+    public string PluginsSector { get; set; } = "";
+    /// <summary>Plugins of the other sectors, by sector file: each sector (profile of a division) has its own.</summary>
+    public Dictionary<string, SectorPluginSet> SectorPlugins { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    private SectorPluginSet PluginSnapshot() => new()
+    {
+        EsPlugins = [.. EsPlugins],
+        ImportedPlugins = [.. ImportedPlugins],
+        EsDisplayType = EsDisplayType,
+        EsDisplayData = new(EsDisplayData),
+    };
+
+    /// <summary>
+    /// Another sector is opened: the plugins in use are kept for the sector they belong to and the plugins of the
+    /// new sector (none if it never had any) take their place. False when nothing changes.
+    /// </summary>
+    public bool SwitchPluginsTo(string sector)
+    {
+        if (string.Equals(PluginsSector, sector, StringComparison.OrdinalIgnoreCase)) return false;
+        if (PluginsSector.Length == 0)
+        {
+            // An older profile: its plugins belong to the sector it opens with.
+            PluginsSector = sector;
+            return false;
+        }
+        SectorPlugins[PluginsSector] = PluginSnapshot();
+        var next = SectorPlugins.GetValueOrDefault(sector) ?? new SectorPluginSet();
+        EsPlugins = [.. next.EsPlugins];
+        ImportedPlugins = [.. next.ImportedPlugins];
+        EsDisplayType = next.EsDisplayType;
+        EsDisplayData = new(next.EsDisplayData);
+        PluginsSector = sector;
+        return true;
+    }
+
+    /// <summary>
+    /// After a profile import: the plugins now listed belong to <paramref name="sector"/>, and those in use before
+    /// the import (<paramref name="before"/>) stay with their own sector.
+    /// </summary>
+    public void AssignPluginsTo(string sector, Profile before)
+    {
+        if (before.PluginsSector.Length > 0 && !string.Equals(before.PluginsSector, sector, StringComparison.OrdinalIgnoreCase))
+            SectorPlugins[before.PluginsSector] = before.PluginSnapshot();
+        SectorPlugins.Remove(sector);
+        PluginsSector = sector;
+    }
     public bool ShowSectorSelection { get; set; } = true;
 
     public static Dictionary<string, WindowLayout> DefaultWindows() => new(StringComparer.OrdinalIgnoreCase)
@@ -359,6 +406,8 @@ public sealed class Profile
                 p.EsPlugins ??= [];
                 p.EsDisplayType ??= "";
                 p.EsDisplayData ??= [];
+                p.PluginsSector ??= "";
+                p.SectorPlugins = new Dictionary<string, SectorPluginSet>(p.SectorPlugins ?? [], StringComparer.OrdinalIgnoreCase);
                 if (p.Version < 2)
                 {
                     // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).
@@ -421,4 +470,13 @@ public sealed class Profile
         JsonSerializer.Deserialize<Theme>(File.ReadAllText(path), Json) ?? new Theme();
 
     public static void SaveTheme(Theme theme, string path) => File.WriteAllText(path, JsonSerializer.Serialize(theme, Json));
+}
+
+/// <summary>The EuroScope plugins of one sector and what they keep in the display.</summary>
+public sealed class SectorPluginSet
+{
+    public List<string> EsPlugins { get; set; } = [];
+    public List<string> ImportedPlugins { get; set; } = [];
+    public string EsDisplayType { get; set; } = "";
+    public Dictionary<string, string> EsDisplayData { get; set; } = [];
 }

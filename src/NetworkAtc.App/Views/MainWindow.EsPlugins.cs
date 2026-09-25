@@ -469,14 +469,29 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Plugins of a just imported profile that are not running yet.</summary>
-    private void LoadImportedEsPlugins()
+    /// <summary>
+    /// Makes the running plugins match the profile's list (after another sector or a profile import): the others are
+    /// unloaded, the missing ones loaded, and the radar screen reopens with the display type of this sector.
+    /// </summary>
+    private void SyncEsPlugins()
     {
         if (_es == null) return;
+        var wanted = _profile.EsPlugins.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in _es.Plugins.Where(p => !wanted.Contains(p.Path))) _es.UnloadPlugin(p.Id);
         var running = _es.Plugins.Select(p => p.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var path in _profile.EsPlugins.Where(p => !running.Contains(p) && File.Exists(p))) _es.LoadPlugin(path);
-        UpdateEsItemsInUse();
+        foreach (var path in _profile.EsPlugins.Where(p => !running.Contains(p)))
+        {
+            if (File.Exists(path)) _es.LoadPlugin(path);
+            else Error($"Плагин EuroScope не найден: {path}");
+        }
+        if (_esOpenDisplay != null)
+        {
+            _es.CloseView(EsBridge.MainView);
+            _esOpenDisplay = null;
+        }
         OpenEsView();
+        UpdateEsItemsInUse();
+        _dirty = true;
     }
 
     /// <summary>Radio and private messages go to the plugins too (OnCompileFrequencyChat / OnCompilePrivateChat).</summary>

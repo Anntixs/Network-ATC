@@ -172,6 +172,37 @@ public class CommandTests
     }
 
     [Fact]
+    public void EuroScopePlugins_ArePerSector()
+    {
+        // An older profile: its plugins belong to the sector it opens with.
+        var p = new Profile { EsPlugins = [@"C:\ES\UIII\TopSky.dll"], EsDisplayType = "TopSky radar" };
+        Assert.False(p.SwitchPluginsTo(@"C:\sectors\UIII.natc"));
+        Assert.Single(p.EsPlugins);
+
+        // Another sector: none of Irkutsk's plugins, nothing of its display.
+        Assert.True(p.SwitchPluginsTo(@"C:\sectors\UNKR.natc"));
+        Assert.Empty(p.EsPlugins);
+        Assert.Equal("", p.EsDisplayType);
+        p.EsPlugins.Add(@"C:\ES\UNKR\GRplugin.dll");
+
+        // Back to Irkutsk: its plugins return, Krasnoyarsk keeps its own.
+        Assert.True(p.SwitchPluginsTo(@"c:\sectors\uiii.natc"));
+        Assert.Equal([@"C:\ES\UIII\TopSky.dll"], p.EsPlugins);
+        Assert.Equal("TopSky radar", p.EsDisplayType);
+        Assert.False(p.SwitchPluginsTo(@"C:\sectors\UIII.natc"));
+        p.SwitchPluginsTo(@"C:\sectors\UNKR.natc");
+        Assert.Equal([@"C:\ES\UNKR\GRplugin.dll"], p.EsPlugins);
+
+        // A profile import: the new plugins belong to the new sector, the old ones stay with theirs.
+        var imported = p.Clone();
+        imported.EsPlugins = [@"C:\ES\UUWV\TopSky.dll"];
+        imported.AssignPluginsTo(@"C:\sectors\UUWV.natc", p);
+        Assert.Equal(@"C:\sectors\UUWV.natc", imported.PluginsSector);
+        imported.SwitchPluginsTo(@"C:\sectors\UNKR.natc");
+        Assert.Equal([@"C:\ES\UNKR\GRplugin.dll"], imported.EsPlugins);
+    }
+
+    [Fact]
     public async Task Wallop_NeedsTextAndIncomingCallsAreMarked()
     {
         var (cmd, session, _, _, _) = Create();
