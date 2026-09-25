@@ -177,7 +177,7 @@ public sealed partial class AtcSession
     {
         var fsd = _fsd ?? throw new InvalidOperationException("Нет подключения к сети");
         await fsd.SendAsync(AtcPackets.TextMessage(Me, "*S", text)).ConfigureAwait(false);
-        Raise(new AtcMessage(MessageChannel.Broadcast, Me, "[супервизору] " + text, _clock(), Outgoing: true));
+        Raise(new AtcMessage(MessageChannel.Broadcast, Me, "[супервайзеру] " + text, _clock(), Outgoing: true));
     }
 
     /// <summary>Sends a flight plan amendment to the server and applies it locally.</summary>
