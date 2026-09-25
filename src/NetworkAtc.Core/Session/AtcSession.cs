@@ -242,7 +242,9 @@ public sealed partial class AtcSession : IAsyncDisposable
             Raise(new AtcMessage(MessageChannel.Server, from, text, now));
         else if (IsToMe(to))
             Raise(new AtcMessage(MessageChannel.Private, from, text, now, Peer: from.ToUpperInvariant()));
-        else if (to is "*" or "*S")
+        else if (to == "*S")
+            Raise(new AtcMessage(MessageChannel.Broadcast, from, "[WALLOP] " + text, now));
+        else if (to == "*")
             Raise(new AtcMessage(MessageChannel.Broadcast, from, text, now));
         else if (Frequency.TryParseFsdAddress(to, out var khz))
             Raise(new AtcMessage(MessageChannel.Radio, from, text, now, FrequencyKhz: khz));

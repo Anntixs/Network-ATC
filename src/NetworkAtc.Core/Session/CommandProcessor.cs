@@ -58,7 +58,7 @@ public sealed partial class CommandProcessor(AtcSession session, Func<Profile> p
         (".fp [AFL123]", "запросить план полёта с сервера"),
         (".msg ПОЗЫВНОЙ текст", "личное сообщение"),
         (".contactme", "попросить выбранный борт выйти на вашу частоту"),
-        (".wallop текст", "запрос супервизору"),
+        (".wallop текст", "вызов супервайзера"),
         (".atis UUEE [B|+]", "буква ATIS аэродрома (+ — следующая)"),
         (".metar [UUEE]", "METAR аэродрома"),
         (".info", "текст информации о диспетчере (отдаётся пилотам по запросу)"),
@@ -270,7 +270,7 @@ public sealed partial class CommandProcessor(AtcSession session, Func<Profile> p
             case "wallop":
                 if (rest.Length == 0) return "Пример: .wallop нужна помощь с AFL123";
                 await session.SendSupervisorRequestAsync(rest).ConfigureAwait(false);
-                return "Запрос отправлен супервизорам";
+                return "Запрос отправлен супервайзерам";
             case "atis":
                 return Atis(args);
             case "metar":

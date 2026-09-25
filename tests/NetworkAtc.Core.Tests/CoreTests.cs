@@ -172,6 +172,19 @@ public class CommandTests
     }
 
     [Fact]
+    public async Task Wallop_NeedsTextAndIncomingCallsAreMarked()
+    {
+        var (cmd, session, _, _, _) = Create();
+        Assert.StartsWith("Пример", await cmd.ExecuteAsync(".wallop"));
+        var messages = new List<AtcMessage>();
+        session.MessageReceived += (_, m) => messages.Add(m);
+        session.OnPacket(null, FsdPacket.Parse("#TMAFL1:*S:need help with AFL2")!);
+        session.OnPacket(null, FsdPacket.Parse("#TMSUP1:*:server restart in 5 min")!);
+        Assert.Equal(["[WALLOP] need help with AFL2", "server restart in 5 min"], messages.Select(m => m.Text));
+        Assert.All(messages, m => Assert.Equal(MessageChannel.Broadcast, m.Channel));
+    }
+
+    [Fact]
     public async Task AnnotatesSelectedAircraft()
     {
         var (cmd, session, _, _, sel) = Create();

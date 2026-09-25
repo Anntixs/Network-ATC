@@ -1153,6 +1153,12 @@ public partial class MainWindow : Window
             return;
         }
         if (m.Channel == MessageChannel.Radio && !m.Outgoing) _sounds.Play(SoundEvent.RadioMessage);
+        if (m.Channel == MessageChannel.Broadcast && !m.Outgoing)
+        {
+            // A broadcast or a call for a supervisor (.wallop): it must not go unnoticed.
+            _sounds.Play(SoundEvent.PrivateMessage);
+            OpenChat("Радио");
+        }
         string from = m.Channel == MessageChannel.Radio && m.FrequencyKhz is { } f && !m.Outgoing ? $"{m.From} [{Frequency.Format(f)}]" : m.From;
         AddLine("Радио", from, m.Text, color);
     }
