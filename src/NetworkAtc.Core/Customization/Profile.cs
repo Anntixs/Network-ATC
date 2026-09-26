@@ -158,7 +158,7 @@ public sealed class PanelSettings
 public sealed class Profile
 {
     /// <summary>Profile format version, used to migrate old profiles.</summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
     public int Version { get; set; }
 
     public string Name { get; set; } = "Default";
@@ -440,6 +440,8 @@ public sealed class Profile
                 p.PluginsSector ??= "";
                 p.SectorPlugins = new Dictionary<string, SectorPluginSet>(p.SectorPlugins ?? [], StringComparer.OrdinalIgnoreCase);
                 if (p.Version < 6) MigrateToEnglish(p);
+                // Version 7: new default look (Graphite). A profile that kept the old default takes it; own colors stay.
+                if (p.Version < 7 && p.Theme != null && Theme.IsVersion6Default(p.Theme)) p.Theme = new Theme();
                 if (p.Version < 2)
                 {
                     // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).

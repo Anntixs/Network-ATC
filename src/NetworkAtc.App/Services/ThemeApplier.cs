@@ -18,6 +18,7 @@ public static class ThemeApplier
         r["AccentBrush"] = Paint.Brush(theme.Accent);
         r["DangerBrush"] = Paint.Brush(theme.Danger);
         r["SuccessBrush"] = Paint.Brush(theme.Success);
+        r["SelectBrush"] = Paint.Brush(theme.TagSelected);
         // Hover: the panel color moved slightly towards the text color.
         Color p = Paint.ToColor(theme.Panel), t = Paint.ToColor(theme.Text);
         r["HoverBrush"] = new SolidColorBrush(Color.FromRgb((byte)(p.R + (t.R - p.R) * 0.07), (byte)(p.G + (t.G - p.G) * 0.07), (byte)(p.B + (t.B - p.B) * 0.07)));

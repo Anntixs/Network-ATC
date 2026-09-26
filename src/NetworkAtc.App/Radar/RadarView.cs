@@ -455,9 +455,10 @@ public sealed class RadarView : FrameworkElement
             if (!OnScreen(p, 200)) continue;
             _targetPoints[t.Callsign] = p;
             bool selected = ReferenceEquals(t, Selected), hovered = ReferenceEquals(t, Hovered);
+            // Emergency squawks tint only the callsign; an STCA conflict turns the whole target and tag red.
             bool emergency = t.Squawk is 7500 or 7600 or 7700;
-            string symbolColor = emergency ? theme.Emergency
-                : conflicted.Contains(t.Callsign) ? theme.Conflict
+            bool conflict = conflicted.Contains(t.Callsign);
+            string symbolColor = conflict ? theme.Conflict
                 : t.Highlight ?? (t.OnGround ? theme.TargetOnGround : t.IsTracked ? theme.TargetTracked : theme.Target);
 
             // History dots, fading out.
@@ -507,7 +508,7 @@ public sealed class RadarView : FrameworkElement
             if (selected) dc.DrawEllipse(null, Paint.Pen(theme.TagSelected, 1), p, s + 8, s + 8);
             if (IsHeard(t.Callsign)) dc.DrawEllipse(null, Paint.Pen(theme.Accent, 2), p, s + 11, s + 11);
 
-            DrawTag(dc, t, p, theme, hovered, emergency || conflicted.Contains(t.Callsign), dip);
+            DrawTag(dc, t, p, theme, hovered, conflict, emergency, dip);
         }
     }
 
@@ -529,7 +530,7 @@ public sealed class RadarView : FrameworkElement
     /// while the mouse is over the aircraft. The first line never moves, so the field under the mouse
     /// stays under the mouse; warnings are written above the tag.
     /// </summary>
-    private void DrawTag(DrawingContext dc, Track t, Point target, Theme theme, bool detailed, bool alert, double dip)
+    private void DrawTag(DrawingContext dc, Track t, Point target, Theme theme, bool detailed, bool alert, bool emergency, double dip)
     {
         var state = StateOf(t);
         bool correlated = state is TrackState.Assumed or TrackState.TransferFromMe or TrackState.TransferToMe;
@@ -558,7 +559,9 @@ public sealed class RadarView : FrameworkElement
                 _ => theme.TagText,
             };
         var brush = Paint.Brush(color);
-        var warningBrush = Paint.Brush(theme.Warning);
+        // In a conflict every line of the tag is red, warnings included.
+        var warningBrush = Paint.Brush(alert ? theme.Conflict : theme.Warning);
+        var emergencyBrush = Paint.Brush(theme.EmergencyCallsign);
         double size = Profile.Tags.FontSize, lineHeight = Math.Round(size * 1.3);
 
         FormattedText MeasureText(string text, Brush b) =>
@@ -568,6 +571,7 @@ public sealed class RadarView : FrameworkElement
         Brush SpanBrush(TagSpan span)
         {
             if (span.Field == "warn") return warningBrush;
+            if (emergency && !alert && span.Field == "callsign") return emergencyBrush;
             if (span.Field != null && !alert && FieldColor?.Invoke(span.Field, t.Callsign) is { } own) return Paint.Brush(own);
             return brush;
         }

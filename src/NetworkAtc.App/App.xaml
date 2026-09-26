@@ -5,15 +5,17 @@
              ShutdownMode="OnExplicitShutdown">
   <Application.Resources>
     <!-- Replaced at run time from the profile's theme (see ThemeApplier). -->
-    <SolidColorBrush x:Key="BgBrush" Color="#0E1116"/>
-    <SolidColorBrush x:Key="PanelBrush" Color="#151A21"/>
-    <SolidColorBrush x:Key="BorderBrush" Color="#232A33"/>
-    <SolidColorBrush x:Key="TextBrush" Color="#D7DDE4"/>
-    <SolidColorBrush x:Key="MutedBrush" Color="#6B7682"/>
-    <SolidColorBrush x:Key="AccentBrush" Color="#4FB3FF"/>
-    <SolidColorBrush x:Key="DangerBrush" Color="#FF5A5F"/>
-    <SolidColorBrush x:Key="SuccessBrush" Color="#3DD68C"/>
-    <SolidColorBrush x:Key="HoverBrush" Color="#1C232C"/>
+    <SolidColorBrush x:Key="BgBrush" Color="#12171B"/>
+    <SolidColorBrush x:Key="PanelBrush" Color="#161C21"/>
+    <SolidColorBrush x:Key="BorderBrush" Color="#2A343C"/>
+    <SolidColorBrush x:Key="TextBrush" Color="#C9D1D7"/>
+    <SolidColorBrush x:Key="MutedBrush" Color="#7D8A94"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="#8FB4CC"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="#E56A5E"/>
+    <SolidColorBrush x:Key="SuccessBrush" Color="#5FB88A"/>
+    <SolidColorBrush x:Key="HoverBrush" Color="#1E252B"/>
+    <!-- The selected aircraft (ASEL), from the theme's TagSelected. -->
+    <SolidColorBrush x:Key="SelectBrush" Color="#F4D26B"/>
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
     <Style x:Key="AtcWindow" TargetType="Window">
@@ -51,7 +53,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="2" Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
@@ -286,7 +288,7 @@
       <Setter Property="Background" Value="{DynamicResource PanelBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="CornerRadius" Value="2"/>
     </Style>
 
     <!-- Segmented tabs (text only, accent underline). -->
@@ -365,15 +367,13 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="controls:FloatingPanel">
-            <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4" Opacity="0.97">
-              <Border.Effect>
-                <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.35" Color="Black"/>
-              </Border.Effect>
+            <!-- Flat window with a hairline frame, as on ATC consoles: no rounding, no shadow. -->
+            <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
               <DockPanel>
                 <Grid DockPanel.Dock="Top" Height="24">
-                  <Border Background="{DynamicResource HoverBrush}" CornerRadius="4,4,0,0"/>
+                  <Border Background="{DynamicResource HoverBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"/>
                   <Thumb x:Name="PART_Title" Cursor="SizeAll" Opacity="0"/>
-                  <TextBlock Text="{TemplateBinding Header}" Margin="9,0,28,0" FontSize="10.5" FontWeight="SemiBold"
+                  <TextBlock Text="{TemplateBinding Header}" Margin="10,0,28,0" FontSize="10.5" FontWeight="SemiBold"
                              Foreground="{DynamicResource MutedBrush}" IsHitTestVisible="False"/>
                   <Button x:Name="PART_Close" Content="✕" HorizontalAlignment="Right" Padding="8,2" FontSize="10"
                           Foreground="{DynamicResource MutedBrush}"/>
@@ -412,29 +412,29 @@
       <Setter Property="FontSize" Value="11.5"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
-    <!-- Top bar buttons in the EuroScope manner: small square keys with a thin frame. -->
+    <!-- Top bar keys: flat text, the full height of the bar; an open panel is underlined. -->
     <Style x:Key="BarButton" TargetType="Button">
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-      <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="Padding" Value="8,0"/>
-      <Setter Property="Height" Value="22"/>
-      <Setter Property="Margin" Value="0,0,3,0"/>
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="Height" Value="39"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="FontSize" Value="11.5"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                    CornerRadius="2" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,0,0,2"
+                    Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.4"/>
@@ -445,31 +445,31 @@
       </Setter>
     </Style>
     <Style x:Key="BarToggle" TargetType="ToggleButton">
-      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-      <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-      <Setter Property="Padding" Value="8,0"/>
-      <Setter Property="Height" Value="22"/>
-      <Setter Property="Margin" Value="0,0,3,0"/>
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="Height" Value="39"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="FontSize" Value="11.5"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                    CornerRadius="2" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,0,0,2"
+                    Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
-                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
               </Trigger>
               <Trigger Property="IsChecked" Value="True">
                 <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>

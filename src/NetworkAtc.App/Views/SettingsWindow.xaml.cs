@@ -103,6 +103,8 @@ public partial class SettingsWindow : Window
         PresetBox.ItemsSource = Theme.BuiltIn;
         PresetBox.SelectedIndex = Math.Max(0, Theme.BuiltIn.ToList().FindIndex(t => t.Name == profile.Theme.Name));
         LoadColors(profile.Theme);
+        // Picking a theme fills in its colors right away (wired after the profile's own colors are shown).
+        PresetBox.SelectionChanged += OnPresetChanged;
 
         FieldList.ItemsSource = fields.All.ToList();
         _sample = new Track("AFL1234") { AircraftType = "A20N", Scratchpad = "RWY24R", ClearedAltitude = 9000, AssignedHeading = 250 };
@@ -150,7 +152,7 @@ public partial class SettingsWindow : Window
         for (int i = 0; i < pages.Length; i++) pages[i].Visibility = i == Nav.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void OnApplyPreset(object sender, RoutedEventArgs e)
+    private void OnPresetChanged(object sender, SelectionChangedEventArgs e)
     {
         if (PresetBox.SelectedItem is Theme preset) LoadColors(preset);
     }

@@ -7,18 +7,24 @@
         WindowState="Maximized" Style="{StaticResource AtcWindow}">
   <Grid x:Name="Root">
     <Grid.RowDefinitions>
-      <RowDefinition Height="30"/>
+      <RowDefinition Height="40"/>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="34"/>
+      <RowDefinition Height="36"/>
     </Grid.RowDefinitions>
 
     <!-- Top bar laid out like EuroScope: menu keys on the left, the controller's station, the METAR strip,
          then view range and UTC on the right. -->
     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel Margin="6,0">
+      <DockPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-          <Border Width="22" Height="22" CornerRadius="2" Background="{DynamicResource AccentBrush}" Margin="0,0,6,0" ToolTip="Network-ATC">
-            <TextBlock Text="N" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource BgBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <!-- Wordmark: a framed square and the name, set apart by a hairline. -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="14,0" Height="39">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="Network-ATC">
+              <Border Width="16" Height="16" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5" Margin="0,0,9,0">
+                <Border Width="5" Height="5" Background="{DynamicResource AccentBrush}"/>
+              </Border>
+              <TextBlock Text="NETWORK-ATC" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+            </StackPanel>
           </Border>
           <Button x:Name="FileButton" Content="FILE ▾" Style="{StaticResource BarButton}" Click="OnFileClick"
                   ToolTip="Sector, EuroScope profile import, recent sectors"/>
@@ -40,7 +46,7 @@
           <Button x:Name="PluginsButton" Content="PLUGINS ▾" Style="{StaticResource BarButton}" Click="OnPluginsClick"
                   ToolTip="Network-ATC plugins and EuroScope plugin data"/>
           <Button Content="SETTINGS" Style="{StaticResource BarButton}" Click="OnSettingsClick"/>
-          <Border Width="1" Height="16" Margin="4,0,7,0" Background="{DynamicResource BorderBrush}"/>
+          <Border Width="1" Height="39" Background="{DynamicResource BorderBrush}"/>
           <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource BarButton}">
             <StackPanel Orientation="Horizontal">
               <Ellipse x:Name="ConnectDot" Width="7" Height="7" Fill="{DynamicResource DangerBrush}" Margin="0,0,6,0"/>
@@ -48,10 +54,10 @@
             </StackPanel>
           </Button>
           <!-- The controller's own station, as in the EuroScope top bar. -->
-          <Border x:Name="StationBox" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8,0" Height="22"
-                  Margin="4,0,0,0" Background="{DynamicResource BgBrush}" Visibility="Collapsed">
-            <TextBlock x:Name="StationText" Text="" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" VerticalAlignment="Center"
-                       Foreground="{DynamicResource AccentBrush}"/>
+          <Border x:Name="StationBox" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0" Padding="14,0" Height="39"
+                  Visibility="Collapsed">
+            <TextBlock x:Name="StationText" Text="" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextBrush}"/>
           </Border>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
@@ -64,8 +70,9 @@
                    ToolTip="Hide aircraft above, hundreds of feet" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
           <TextBlock x:Name="SectorText" Text="No sector" Style="{StaticResource Muted}" Margin="10,0,12,0" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
           <TextBlock x:Name="RangeText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,12,0"/>
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8,0" Height="22" Background="{DynamicResource BgBrush}">
-            <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="16,0" Height="39" Background="{DynamicResource BgBrush}">
+            <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextBrush}"/>
           </Border>
         </StackPanel>
         <!-- METAR strip of the active airports: ATIS letter, wind and QNH; the full METAR in the tooltip. -->
@@ -78,7 +85,7 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6,0" Height="22" Margin="0,0,4,0"
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8,0" Height="24" Margin="0,0,6,0"
                         Background="{DynamicResource BgBrush}" ToolTip="{Binding Raw}">
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Station}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" Margin="0,0,5,0"/>
@@ -419,7 +426,7 @@
       <DockPanel Margin="10,4">
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" Width="150">
           <TextBlock Text="ASEL" Style="{StaticResource Muted}" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,8,0"/>
-          <TextBlock x:Name="AselText" Text="—" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" Foreground="#F2C94C"/>
+          <TextBlock x:Name="AselText" Text="—" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" Foreground="{DynamicResource SelectBrush}"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
           <TextBlock x:Name="RxText" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
