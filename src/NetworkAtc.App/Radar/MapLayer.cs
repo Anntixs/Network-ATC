@@ -15,6 +15,8 @@ public sealed class MapLayer : FrameworkElement
     public MapLayer()
     {
         IsHitTestVisible = false;
+        // The map is drawn beyond the screen edges (for dragging): never over the bars around the radar.
+        ClipToBounds = true;
         AddVisualChild(_visual);
     }
 
