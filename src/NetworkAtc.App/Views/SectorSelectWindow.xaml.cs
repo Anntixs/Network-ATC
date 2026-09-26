@@ -33,6 +33,12 @@ public partial class SectorSelectWindow : Window
     /// <summary>The chosen sector file, or null when the window was cancelled.</summary>
     public string? SelectedPath { get; private set; }
 
+    /// <summary>A EuroScope display file (.asr) to open instead of a sector: it names its own sector.</summary>
+    public string? SelectedAsr { get; private set; }
+
+    /// <summary>The sector is opened as a ground sector: the ground radar view of its airport.</summary>
+    public bool OpenAsGround { get; private set; }
+
     public static string DemoPath => Path.Combine(AppContext.BaseDirectory, "demo", "UUEE-demo.natc");
 
     private void RefreshRecent()
@@ -81,6 +87,23 @@ public partial class SectorSelectWindow : Window
     private void OnOpenEuroScope(object sender, RoutedEventArgs e)
     {
         if (Browse("EuroScope sector", "EuroScope sector (*.sct;*.sct2)|*.sct;*.sct2|All files|*.*") is { } path) Choose(path);
+    }
+
+    private void OnOpenAsr(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Title = "EuroScope display", Filter = "EuroScope display (*.asr)|*.asr|All files|*.*" };
+        if (_profile.RecentAsr.FirstOrDefault(File.Exists) is { } last) dialog.InitialDirectory = Path.GetDirectoryName(last);
+        if (dialog.ShowDialog(this) != true) return;
+        SelectedAsr = dialog.FileName;
+        DialogResult = true;
+    }
+
+    private void OnOpenGround(object sender, RoutedEventArgs e)
+    {
+        if (Browse("Ground sector", "Sector (*.sct;*.sct2;*.natc)|*.sct;*.sct2;*.natc|All files|*.*") is not { } path) return;
+        OpenAsGround = true;
+        Choose(path);
+        if (DialogResult != true) OpenAsGround = false;
     }
 
     private void OnDemo(object sender, RoutedEventArgs e) => Choose(DemoPath);

@@ -11,6 +11,8 @@ using NetworkAtc.App.Services;
 using NetworkAtc.Core.Customization;
 using NetworkAtc.Core.EsPlugins;
 using NetworkAtc.Core.Fsd;
+using NetworkAtc.Core.Geo;
+using NetworkAtc.Core.Import;
 using NetworkAtc.Core.Plugins;
 using NetworkAtc.Core.Radar;
 using NetworkAtc.Core.Sectors;
@@ -1286,6 +1288,33 @@ public partial class MainWindow : Window
         var menu = new ContextMenu { PlacementTarget = FileButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         menu.Items.Add(MenuEntry("Open sector…", () => OnOpenSectorClick(this, new RoutedEventArgs()), "Ctrl+O"));
         menu.Items.Add(MenuEntry("Import EuroScope profile (.prf)…", ImportEuroScopeProfile));
+        menu.Items.Add(MenuEntry("Open EuroScope display (.asr)…", () =>
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Title = "EuroScope display", Filter = "EuroScope display (*.asr)|*.asr|All files|*.*" };
+            if (_profile.RecentAsr.FirstOrDefault(File.Exists) is { } last) dialog.InitialDirectory = Path.GetDirectoryName(last);
+            if (dialog.ShowDialog(this) == true) OpenAsr(dialog.FileName);
+        }));
+        var recentAsr = _profile.RecentAsr.Where(File.Exists).ToList();
+        if (recentAsr.Count > 0)
+        {
+            var sub = new MenuItem { Header = "Recent displays (.asr)" };
+            foreach (var a in recentAsr) sub.Items.Add(MenuEntry(Path.GetFileName(a), () => OpenAsr(a)));
+            menu.Items.Add(sub);
+        }
+        if (_profile.MapItems.Count > 0)
+            menu.Items.Add(MenuEntry("Show all map elements (not only the display's)", () =>
+            {
+                _profile.MapItems.Clear();
+                _dirty = true;
+                Radar.InvalidateVisual();
+                SaveProfile();
+            }));
+        var ground = new MenuItem { Header = _profile.GroundAirport.Length > 0 ? $"Ground radar (GRP) · {_profile.GroundAirport}" : "Ground radar (GRP)" };
+        if (_profile.GroundAirport.Length > 0) ground.Items.Add(MenuEntry("Back to the radar view", LeaveGroundRadar));
+        foreach (var a in SectorAirports().Take(12))
+            ground.Items.Add(MenuEntry(a.Name.ToUpperInvariant(), () => { EnterGroundRadar(a.Name); SaveProfile(); }));
+        if (ground.Items.Count == 0) ground.Items.Add(new MenuItem { Header = "No airports in this sector", IsEnabled = false });
+        menu.Items.Add(ground);
         var recent = _profile.RecentSectors.Where(r => File.Exists(r.Path)).Take(8).ToList();
         if (recent.Count > 0)
         {
@@ -1437,10 +1466,101 @@ public partial class MainWindow : Window
     {
         SaveProfile();
         var dialog = new SectorSelectWindow(_profile, Radar.Sector) { Owner = this };
-        if (dialog.ShowDialog() != true || dialog.SelectedPath == null) return;
+        if (dialog.ShowDialog() != true) return;
+        if (dialog.SelectedAsr != null)
+        {
+            OpenAsr(dialog.SelectedAsr);
+            return;
+        }
+        if (dialog.SelectedPath == null) return;
         _profile.ViewCenterLatitude = 0;
+        _profile.MapItems.Clear();
         LoadSector(dialog.SelectedPath);
+        if (dialog.OpenAsGround) EnterGroundRadar(null);
+        else _profile.GroundAirport = "";
         SaveProfile();
+    }
+
+    /// <summary>
+    /// Opens a EuroScope display file (.asr) as EuroScope does: its sector, only the map elements it lists, its screen
+    /// area and settings, and its display type (a plugin's, like the GRP ground radar) with the data the plugin saved.
+    /// </summary>
+    private void OpenAsr(string path)
+    {
+        AsrOpenResult result;
+        try
+        {
+            result = AsrLoader.Apply(path, _profile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error("Could not open the display: " + ex.Message);
+            return;
+        }
+        if (result.SectorPath != null) LoadSector(result.SectorPath);
+        if (_profile.ViewCenterLatitude != 0)
+            Radar.SetView(new GeoPoint(_profile.ViewCenterLatitude, _profile.ViewCenterLongitude), _profile.ViewNmPerPixel);
+        ApplyProfile();
+        BuildLayerList();
+        // Switch the plugin display without saving the old one over the data just read from the file.
+        if (_es != null && _esOpenDisplay != null)
+        {
+            _es.CloseView(EsBridge.MainView);
+            _esOpenDisplay = null;
+        }
+        OpenEsView();
+        string display = result.DisplayType.Length > 0 ? result.DisplayType : "standard radar";
+        Info($"Display {Path.GetFileName(path)}: {display}" + (result.Notes.Count > 0 ? "; " + string.Join("; ", result.Notes) : ""));
+        if (result.DisplayType.Length > 0 && _es?.DisplayTypes.Any(d => d.Name.Equals(result.DisplayType, StringComparison.OrdinalIgnoreCase)) != true)
+            Info($"The display \"{result.DisplayType}\" is drawn by its plugin ({string.Join(", ", result.Plugins.DefaultIfEmpty("the EuroScope plugin"))}): " +
+                 "load it in PLUGINS → Load EuroScope plugin, the display opens as soon as it is loaded");
+        _dirty = true;
+        SaveProfile();
+    }
+
+    // ---- ground radar ---------------------------------------------------------------------------
+
+    /// <summary>The radar view before the ground radar was opened, to come back to.</summary>
+    private (GeoPoint Center, double NmPerPixel)? _beforeGround;
+
+    /// <summary>Airports of the sector, nearest to the view first.</summary>
+    private List<NamedPoint> SectorAirports()
+    {
+        var center = Radar.ViewCenter;
+        return Radar.Sector?.Airports.Where(a => a.Name.Length == 4)
+                   .OrderBy(a => GeoMath.DistanceNm(center, a.Position)).ToList() ?? [];
+    }
+
+    /// <summary>
+    /// Ground radar (as the GRP plugin of EuroScope): the view on an airport, about 2.5 NM across, where the
+    /// aircraft on the ground are drawn to scale by type and turned to their heading.
+    /// </summary>
+    private void EnterGroundRadar(string? airport)
+    {
+        var airports = SectorAirports();
+        var wanted = airport ?? _profile.ActiveAirports.FirstOrDefault(a => airports.Any(x => x.Name.Equals(a, StringComparison.OrdinalIgnoreCase)))
+                     ?? Radar.Sector?.DefaultAirport;
+        var apt = airports.FirstOrDefault(a => a.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase)) ?? airports.FirstOrDefault();
+        if (apt == null)
+        {
+            Error("The sector has no airports for the ground radar");
+            return;
+        }
+        if (_profile.GroundAirport.Length == 0) _beforeGround = (Radar.ViewCenter, Radar.NmPerPixel);
+        _profile.GroundAirport = apt.Name.ToUpperInvariant();
+        double pixels = Math.Max(300, Math.Min(Radar.ActualWidth, Radar.ActualHeight));
+        Radar.SetView(apt.Position, 2.5 / pixels);
+        Info($"Ground radar: {_profile.GroundAirport}");
+        _dirty = true;
+    }
+
+    private void LeaveGroundRadar()
+    {
+        _profile.GroundAirport = "";
+        var (center, nmPerPixel) = _beforeGround ?? (Radar.Sector?.Center ?? Radar.ViewCenter, 0.15);
+        Radar.SetView(center, nmPerPixel);
+        _beforeGround = null;
+        _dirty = true;
     }
 
     private void OnRunwaysClick(object sender, RoutedEventArgs e)

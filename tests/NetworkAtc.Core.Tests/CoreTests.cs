@@ -13,6 +13,19 @@ namespace NetworkAtc.Core.Tests;
 public class GeoTests
 {
     [Fact]
+    public void AircraftToScaleOnTheGroundRadar()
+    {
+        Assert.Equal((37.6, 35.8), AircraftShapes.Size("a320", 'M'));
+        Assert.Equal((64, 62), AircraftShapes.Size("ZZZZ", 'H'));
+        Assert.Equal((9, 11), AircraftShapes.Size("", 'L'));
+        var outline = AircraftShapes.Outline(37.6, 35.8);
+        Assert.Equal((18.8, 0), outline[0]);                                   // nose ahead of the middle
+        Assert.Equal(37.6, outline.Max(p => p.Forward) - outline.Min(p => p.Forward), 3);
+        Assert.Equal(35.8, outline.Max(p => p.Right) - outline.Min(p => p.Right), 3);
+        Assert.Equal(outline.Max(p => p.Right), -outline.Min(p => p.Right), 6); // symmetric
+    }
+
+    [Fact]
     public void SupervisorPositionsLogInAsObservers()
     {
         Assert.Equal(Facility.Supervisor, AtcSession.FacilityFromCallsign("sky_sup"));

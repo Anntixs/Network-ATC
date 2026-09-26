@@ -345,6 +345,16 @@ public sealed class Profile
     public Dictionary<string, string> KeyBindings { get; set; } = new(DefaultKeyBindings, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Last map view.</summary>
+    /// <summary>
+    /// Only these elements of a map layer are drawn (from a EuroScope .asr: "GEO" → "UUEE Taxiways"...);
+    /// a layer not listed shows all its elements.
+    /// </summary>
+    public Dictionary<string, List<string>> MapItems { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>EuroScope display files (.asr) opened lately, newest first.</summary>
+    public List<string> RecentAsr { get; set; } = [];
+
+    /// <summary>Airport of the ground radar view (aircraft to scale, GRP style); empty — the normal radar.</summary>
+    public string GroundAirport { get; set; } = "";
     public double ViewCenterLatitude { get; set; }
     public double ViewCenterLongitude { get; set; }
     public double ViewNmPerPixel { get; set; } = 0.15;

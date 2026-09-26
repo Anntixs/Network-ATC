@@ -469,6 +469,12 @@ public sealed class EuroScopeAsr
     public (GeoPoint A, GeoPoint B)? WindowArea { get; private set; }
     /// <summary>Other "KEY:value" lines.</summary>
     public List<(string Key, string Value)> Values { get; } = [];
+    /// <summary>The shown elements of each layer by name ("Geo:UUEE Taxiways:" → GEO: UUEE Taxiways).</summary>
+    public Dictionary<string, HashSet<string>> Items { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>What plugins saved into the display ("PLUGIN:GRplugin:Name:value"), name → value.</summary>
+    public Dictionary<string, string> PluginData { get; } = new(StringComparer.Ordinal);
+    /// <summary>The plugins that saved data into the display.</summary>
+    public HashSet<string> Plugins { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public static EuroScopeAsr Parse(string text)
     {
@@ -483,11 +489,21 @@ public sealed class EuroScopeAsr
             {
                 asr.ElementCount++;
                 asr.VisibleLayers.Add(layer);
+                string item = f[1].Trim();
+                if (item.Length > 0)
+                {
+                    if (!asr.Items.TryGetValue(layer, out var names)) asr.Items[layer] = names = new(StringComparer.OrdinalIgnoreCase);
+                    names.Add(item);
+                }
                 if (layer == "FIXES" && f[^1].Trim().Equals("name", StringComparison.OrdinalIgnoreCase)) asr.VisibleLayers.Add("FIX NAMES");
                 continue;
             }
             switch (key.ToUpperInvariant())
             {
+                case "PLUGIN" when f.Length >= 4:
+                    asr.Plugins.Add(f[1].Trim());
+                    asr.PluginData[f[2]] = string.Join(':', f.Skip(3));
+                    break;
                 case "DISPLAYTYPENAME": asr.DisplayType = value; break;
                 case "SECTORFILE": if (value.Length > 0) asr.SectorFile = value; break;
                 case "TAGFAMILY": if (value.Length > 0) asr.TagFamily = value; break;

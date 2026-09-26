@@ -471,4 +471,57 @@ public class EuroScopeImportTests
         Assert.Equal(Profile.DefaultTagClicks()["callsign"].Left, profile.TagClicks["callsign"].Left);
         Assert.Contains("tag item \"unknown thing\"", skipped);
     }
+
+    [Fact]
+    public void AsrOpensItsSectorElementsAndPluginDisplay()
+    {
+        var dir = Directory.CreateTempSubdirectory("asr");
+        try
+        {
+            // The ASR was made on another computer: its sector is found by name under the profile folder.
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "UUEE"));
+            string sct = Path.Combine(dir.FullName, "UUEE", "UUEE_SMR.sct");
+            File.WriteAllText(sct, "[INFO]\nUUEE ground\n");
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "ASR"));
+            string asrPath = Path.Combine(dir.FullName, "ASR", "UUEE_GND.asr");
+            File.WriteAllText(asrPath, string.Join("\r\n",
+                "DisplayTypeName:Ground Radar display",
+                "DisplayTypeNeedRadarContent:1",
+                @"SECTORFILE:C:\Users\someone\EuroScope\UUEE\UUEE_SMR.sct",
+                "Geo:UUEE Taxiway lines:",
+                "Regions:UUEE Apron:polygon",
+                "Regions:UUEE Buildings:polygon",
+                "Airports:UUEE:symbol",
+                "PLUGIN:GRplugin:ShowStands:1",
+                "PLUGIN:GRplugin:Colors:apron=#303030:taxiway=#404040",
+                "WINDOWAREA:55.950000:37.380000:55.990000:37.450000",
+                "HISTORY_DOTS:3"));
+            var profile = new Profile();
+            var r = AsrLoader.Apply(asrPath, profile);
+
+            Assert.Equal(sct, r.SectorPath);
+            Assert.Equal("Ground Radar display", profile.EsDisplayType);
+            Assert.Equal(["GRplugin"], r.Plugins);
+            Assert.Equal("1", profile.EsDisplayData["ShowStands"]);
+            Assert.Equal("apron=#303030:taxiway=#404040", profile.EsDisplayData["Colors"]);
+            Assert.Equal(["UUEE Taxiway lines"], profile.MapItems["GEO"]);
+            Assert.Equal(["UUEE Apron", "UUEE Buildings"], profile.MapItems["REGIONS"].Order());
+            Assert.False(profile.MapItems.ContainsKey("AIRPORTS"));   // points: the whole layer
+            Assert.True(profile.IsLayerVisible("REGIONS"));
+            Assert.False(profile.IsLayerVisible("ARTCC"));
+            Assert.Equal(55.97, profile.ViewCenterLatitude, 3);
+            Assert.Equal(3, profile.Targets.HistoryDots);
+            Assert.Equal(asrPath, profile.RecentAsr[0]);
+
+            // The standard display clears the plugin display.
+            File.WriteAllText(asrPath, "DisplayTypeName:Standard ES radar screen\r\nGeo:UUEE Taxiway lines:\r\n");
+            AsrLoader.Apply(asrPath, profile);
+            Assert.Equal("", profile.EsDisplayType);
+            Assert.Single(profile.RecentAsr);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
+    }
 }
