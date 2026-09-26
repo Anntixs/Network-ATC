@@ -45,4 +45,24 @@ public sealed class AtisSettings
     ];
 
     public string Callsign => AtisText.Callsign(Airport, Suffix);
+
+    /// <summary>Ready texts to switch between (imported from vATIS): each sets the text and the remark.</summary>
+    public List<AtisPreset> Presets { get; set; } = [];
+    /// <summary>Name of the preset in use; empty when the text was written here.</summary>
+    public string Preset { get; set; } = "";
+
+    public void ApplyPreset(AtisPreset p)
+    {
+        Text = [.. p.Text];
+        Remark = p.Remark;
+        Preset = p.Name;
+    }
+}
+
+/// <summary>One ready ATIS text, as a vATIS preset: the lines for pilots and the additional info.</summary>
+public sealed class AtisPreset
+{
+    public string Name { get; set; } = "";
+    public List<string> Text { get; set; } = [];
+    public string Remark { get; set; } = "";
 }

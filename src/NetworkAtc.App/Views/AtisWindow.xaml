@@ -10,6 +10,8 @@
         <Button Content="+ Add" Click="OnAdd" Margin="0,0,6,0"/>
         <Button x:Name="RemoveButton" Content="Remove" Click="OnRemove"/>
       </StackPanel>
+      <Button DockPanel.Dock="Bottom" Content="Import vATIS profile…" Click="OnImportVatis" Margin="0,8,0,0"
+              ToolTip="The .json profile exported from vATIS: stations, frequencies and presets"/>
       <ListBox x:Name="StationList" SelectionChanged="OnStationSelected" FontFamily="{StaticResource MonoFont}"/>
     </DockPanel>
     <ScrollViewer VerticalScrollBarVisibility="Auto">

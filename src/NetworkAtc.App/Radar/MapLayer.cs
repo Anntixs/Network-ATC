@@ -4,13 +4,12 @@ using System.Windows.Media;
 namespace NetworkAtc.App.Radar;
 
 /// <summary>
-/// The sector map under the radar: drawn once into a cached picture (<see cref="BitmapCache"/>) and, while the view
-/// is being panned or zoomed, only moved and scaled as that picture on the graphics card. The radar redraws it crisply
-/// when the view has settled or the map itself changes; traffic updates never touch it.
+/// The sector map under the radar, kept as vector drawing (always sharp). Traffic updates never touch it; while the
+/// view is dragged it is only shifted, and the radar redraws it when the zoom or the map itself changes.
 /// </summary>
 public sealed class MapLayer : FrameworkElement
 {
-    private readonly DrawingVisual _visual = new() { CacheMode = new BitmapCache { EnableClearType = false, SnapsToDevicePixels = false } };
+    private readonly DrawingVisual _visual = new();
     private Brush _background = Brushes.Black;
 
     public MapLayer()
@@ -37,10 +36,10 @@ public sealed class MapLayer : FrameworkElement
         return _visual.RenderOpen();
     }
 
-    /// <summary>Moves and scales the last picture to follow the view until it is redrawn.</summary>
-    public void Follow(Matrix fromDrawnToNow)
+    /// <summary>Shifts the last drawing to follow a dragged view until it is redrawn.</summary>
+    public void Follow(double dx, double dy)
     {
-        var t = new MatrixTransform(fromDrawnToNow);
+        var t = new TranslateTransform(dx, dy);
         t.Freeze();
         _visual.Transform = t;
     }

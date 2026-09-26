@@ -99,6 +99,38 @@ public partial class AtisWindow : Window
         _save();
     }
 
+    private void OnImportVatis(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog { Title = "vATIS profile", Filter = "vATIS profile (*.json)|*.json|All files|*.*" };
+        if (dlg.ShowDialog(this) != true) return;
+        List<AtisSettings> imported;
+        try
+        {
+            imported = VatisImport.Parse(File.ReadAllText(dlg.FileName));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or System.Text.Json.JsonException)
+        {
+            MessageBox.Show(this, "Could not read the vATIS profile: " + ex.Message, "Import vATIS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        int added = 0, replaced = 0, skipped = 0;
+        foreach (var s in imported)
+        {
+            int i = _profile.Atis.FindIndex(x => x.Callsign.Equals(s.Callsign, StringComparison.OrdinalIgnoreCase));
+            if (i < 0) { _profile.Atis.Add(s); added++; }
+            else if (_atis.IsConnected(_profile.Atis[i])) skipped++;
+            else { _profile.Atis[i] = s; replaced++; }
+        }
+        _current = imported.FirstOrDefault(s => _profile.Atis.Contains(s)) ?? _current;
+        _save();
+        RefreshList();
+        ShowEditor();
+        MessageBox.Show(this,
+            $"Stations added: {added}, updated: {replaced}" + (skipped > 0 ? $", skipped (connected now): {skipped}" : "") +
+            ".\nPresets are chosen at the top of each station's text.",
+            "Import vATIS", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     // ---- editor ---------------------------------------------------------------------------------
 
     private TextBlock Label(string text) => new() { Text = text, Style = (Style)FindResource("FieldLabel"), Margin = new Thickness(0, 10, 0, 3) };
@@ -167,6 +199,23 @@ public partial class AtisWindow : Window
         Editor.Children.Add(Label("ATIS letter"));
         Editor.Children.Add(Row(_letter, next, letterBox, auto));
 
+        // Presets (from vATIS): each sets the text and the additional info.
+        if (s.Presets.Count > 0)
+        {
+            Editor.Children.Add(Label("Preset"));
+            var preset = new ComboBox { Width = 260, HorizontalAlignment = HorizontalAlignment.Left };
+            foreach (var p in s.Presets) preset.Items.Add(p.Name);
+            preset.SelectedItem = s.Presets.Any(p => p.Name == s.Preset) ? s.Preset : null;
+            preset.SelectionChanged += (_, _) =>
+            {
+                if (preset.SelectedIndex < 0 || s.Presets[preset.SelectedIndex].Name == s.Preset) return;
+                s.ApplyPreset(s.Presets[preset.SelectedIndex]);
+                _save();
+                Dispatcher.BeginInvoke(ShowEditor);
+            };
+            Editor.Children.Add(preset);
+        }
+
         // Text for pilots.
         Editor.Children.Add(Label("Text for pilots (variables: $airport, $atiscode($airport), $metar($airport), $deprwy($airport), $arrrwy($airport), $time…)"));
         var text = new TextBox
@@ -182,6 +231,7 @@ public partial class AtisWindow : Window
         text.TextChanged += (_, _) =>
         {
             s.Text = text.Text.Replace("\r", "").Split('\n').ToList();
+            if (s.Presets.FirstOrDefault(p => p.Name == s.Preset) is { } used && !used.Text.SequenceEqual(s.Text)) s.Preset = "";
             UpdatePreview();
         };
         text.LostFocus += (_, _) => _save();
