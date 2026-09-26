@@ -414,19 +414,32 @@ public partial class MainWindow
         menu.Items.Add(new MenuItem { Header = "EuroScope plugins", IsEnabled = false });
         if (_es == null)
             menu.Items.Add(new MenuItem { Header = "    not started (no esbridge folder)", IsEnabled = false });
-        foreach (var p in _es?.Plugins ?? [])
+        var running = _es?.Plugins.ToList() ?? [];
+        if (_es != null && running.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "    none loaded", IsEnabled = false });
+        foreach (var p in running)
         {
-            var item = new MenuItem { Header = $"    {p.Name}  {p.Version}" + (p.Author.Length > 0 ? $" · {p.Author}" : "") };
+            var item = new MenuItem
+            {
+                Header = $"    {p.Name}  {p.Version}" + (p.Author.Length > 0 ? $" · {p.Author}" : ""),
+                ToolTip = p.Path,
+            };
             var id = p.Id;
             var path = p.Path;
-            item.Items.Add(MenuEntry("Unload", () =>
+            item.Items.Add(MenuEntry("Unload", () => UnloadEsPlugin(id, path)));
+            item.Items.Add(MenuEntry("Reload", () =>
             {
+                // The host handles requests in order: the old copy is gone before the file is loaded again.
                 _es?.UnloadPlugin(id);
-                _profile.EsPlugins.RemoveAll(x => x.Equals(path, StringComparison.OrdinalIgnoreCase));
-                SaveProfile();
+                _es?.LoadPlugin(path);
             }));
             menu.Items.Add(item);
         }
+        if (running.Count > 1)
+            menu.Items.Add(MenuEntry("Unload all EuroScope plugins", () =>
+            {
+                foreach (var p in running) UnloadEsPlugin(p.Id, p.Path);
+            }));
         if (_es != null)
         {
             menu.Items.Add(MenuEntry("Load EuroScope plugin (.dll)…", () =>
@@ -467,6 +480,15 @@ public partial class MainWindow
                 menu.Items.Add(sub);
             }
         }
+    }
+
+    /// <summary>Unloads a plugin and takes it off this sector's list, so it is not loaded again next time.</summary>
+    private void UnloadEsPlugin(int id, string path)
+    {
+        _es?.UnloadPlugin(id);
+        _profile.EsPlugins.RemoveAll(x => x.Equals(path, StringComparison.OrdinalIgnoreCase));
+        SaveProfile();
+        Info($"EuroScope plugin unloaded: {Path.GetFileName(path)}");
     }
 
     /// <summary>
