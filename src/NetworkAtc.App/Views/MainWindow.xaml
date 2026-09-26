@@ -104,6 +104,8 @@
 
     <!-- Radar with floating list windows -->
     <Grid Grid.Row="1">
+      <!-- The sector map, drawn once and moved as a picture while panning; the radar draws traffic over it. -->
+      <radar:MapLayer x:Name="MapLayer"/>
       <radar:RadarView x:Name="Radar"/>
       <Canvas x:Name="WindowsLayer">
 

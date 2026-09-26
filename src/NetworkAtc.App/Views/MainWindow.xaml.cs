@@ -131,6 +131,7 @@ public partial class MainWindow : Window
         _voice.Message += (text, error) => { if (error) Error(text); else Info(text); };
         _voice.ApplySettings();
 
+        Radar.Map = MapLayer;
         Radar.Profile = _profile;
         Radar.TagFields = _tagFields;
         Radar.Plugins = _registry;
