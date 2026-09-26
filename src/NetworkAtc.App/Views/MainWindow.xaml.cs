@@ -357,7 +357,7 @@ public partial class MainWindow : Window
             ClockText.Text = DateTime.UtcNow.ToString("HH:mm:ss") + "Z";
             CheckAtisLetters();
             AselText.Text = Radar.Selected?.Callsign ?? "—";
-            TxText.Text = _session.Info is { } i ? "TX " + Frequency.Format(i.FrequencyKhz) : "";
+            TxText.Text = _session.Info is { } i ? "TX " + Frequency.Format(i.FrequencyKhz) : "TX —";
             UpdateVoiceRadios();
             RefreshLists();
             if (Radar.Selected is { } t && FlightPlanWindow.Visibility == Visibility.Visible) ShowPlanSummary(t);
@@ -437,7 +437,7 @@ public partial class MainWindow : Window
 
     private void UpdateViewInfo()
     {
-        RangeText.Text = $"{Radar.RangeNm:0} NM";
+        RangeText.Text = $"RNG {Radar.RangeNm:0}";
         var g = Radar.MouseGeo;
         CursorText.Text = $"{Dms(g.Latitude, 'N', 'S')}  {Dms(g.Longitude, 'E', 'W')}";
     }
@@ -1051,10 +1051,11 @@ public partial class MainWindow : Window
 
     private void UpdateConnectionState(bool connected)
     {
-        ConnectText.Text = connected ? "ONLINE" : "CONNECT";
+        // Online the bar shows the station itself: callsign and primary frequency.
+        bool station = connected && _session.Info != null;
+        ConnectText.Text = station ? _session.Info!.Callsign : connected ? "ONLINE" : "CONNECT";
+        FrequencyText.Text = station ? Frequency.Format(_session.Info!.FrequencyKhz) : "";
         ConnectDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, connected ? "SuccessBrush" : "DangerBrush");
-        StationText.Text = connected && _session.Info is { } i ? $"{i.Callsign}  {Frequency.Format(i.FrequencyKhz)}" : "";
-        StationBox.Visibility = StationText.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (!connected) AtcList.ItemsSource = null;
         // Voice follows the network connection; its failures never break the network session.
         if (connected && !_wasConnected && _session.Info is { } info)

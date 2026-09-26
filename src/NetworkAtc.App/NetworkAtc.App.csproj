@@ -18,6 +18,11 @@
     <ProjectReference Include="..\SkyNetwork.Voice\SkyNetwork.Voice.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- IBM Plex (SIL Open Font License, Fonts/OFL.txt): built into the program, so it looks the same on every PC. -->
+    <Resource Include="Fonts\*.ttf" />
+    <None Include="Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" Link="Fonts\OFL.txt" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="..\..\demo\UUEE-demo.*" LinkBase="demo" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

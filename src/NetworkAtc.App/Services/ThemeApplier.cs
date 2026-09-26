@@ -19,8 +19,17 @@ public static class ThemeApplier
         r["DangerBrush"] = Paint.Brush(theme.Danger);
         r["SuccessBrush"] = Paint.Brush(theme.Success);
         r["SelectBrush"] = Paint.Brush(theme.TagSelected);
+        r["WarningBrush"] = Paint.Brush(theme.Warning);
         // Hover: the panel color moved slightly towards the text color.
         Color p = Paint.ToColor(theme.Panel), t = Paint.ToColor(theme.Text);
-        r["HoverBrush"] = new SolidColorBrush(Color.FromRgb((byte)(p.R + (t.R - p.R) * 0.07), (byte)(p.G + (t.G - p.G) * 0.07), (byte)(p.B + (t.B - p.B) * 0.07)));
+        r["HoverBrush"] = Mix(p, t, 0.07);
+        r["HeaderBrush"] = Mix(p, t, 0.035);
+    }
+
+    private static SolidColorBrush Mix(Color a, Color b, double f)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb((byte)(a.R + (b.R - a.R) * f), (byte)(a.G + (b.G - a.G) * f), (byte)(a.B + (b.B - a.B) * f)));
+        brush.Freeze();
+        return brush;
     }
 }
