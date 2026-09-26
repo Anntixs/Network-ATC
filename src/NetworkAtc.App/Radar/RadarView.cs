@@ -22,7 +22,7 @@ namespace NetworkAtc.App.Radar;
 /// </summary>
 public sealed class RadarView : FrameworkElement
 {
-    private static readonly Typeface UiTypeface = new("Segoe UI");
+    private static readonly Typeface UiTypeface = new(AppFonts.Family(AppFonts.Ui), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
     private const double MinNmPerPixel = 0.002, MaxNmPerPixel = 5;
 
     private Projection _projection = new(new GeoPoint(55.97, 37.41));
@@ -41,7 +41,8 @@ public sealed class RadarView : FrameworkElement
     private (string Callsign, string Field)? _hoveredField;
     private (string Callsign, string? Field, Point Start)? _pendingTagClick;
     private readonly Dictionary<string, Point> _targetPoints = new(StringComparer.OrdinalIgnoreCase);
-    private Typeface _tagTypeface = new("Consolas");
+    private Typeface _tagTypeface = new(AppFonts.Family(AppFonts.Mono), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private string _tagFontName = AppFonts.Mono;
 
     /// <summary>End of a measuring line: a moving aircraft or a fixed point.</summary>
     private sealed record Anchor(Track? Track, GeoPoint Point)
@@ -167,7 +168,12 @@ public sealed class RadarView : FrameworkElement
     {
         var theme = Profile.Theme;
         dc.DrawRectangle(Paint.Brush(theme.RadarBackground), null, new Rect(0, 0, ActualWidth, ActualHeight));
-        _tagTypeface = new Typeface(Profile.Tags.FontFamily.Split(',')[0].Trim());
+        if (!string.Equals(_tagFontName, Profile.Tags.FontFamily, StringComparison.Ordinal))
+        {
+            _tagFontName = Profile.Tags.FontFamily;
+            _tagTypeface = new Typeface(AppFonts.Family(_tagFontName), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            _textCache.Clear();
+        }
         var drawing = EsDrawing;
         var full = new Rect(0, 0, ActualWidth, ActualHeight);
         if (HideOwnContent)
@@ -205,20 +211,67 @@ public sealed class RadarView : FrameworkElement
         }
     }
 
-    private void DrawSector(DrawingContext dc, SectorFile s, Theme theme)
+    /// <summary>
+    /// One piece of the static map in projection-plane coordinates (NM): all lines of one color, the regions of one color,
+    /// the sector lines or the runways. Built once per sector, theme and layer choice; every frame only moves and
+    /// scales it, which is far cheaper than projecting and drawing thousands of segments one by one.
+    /// </summary>
+    private sealed record MapPiece(Geometry Geometry, string? Fill, string? Stroke, bool Dashed, bool Runway);
+    private List<MapPiece> _mapPieces = [];
+    private string _mapKey = "";
+    private static readonly string[] MapLayers = ["REGIONS", "GEO", "LOW AIRWAY", "HIGH AIRWAY", "ARTCC LOW", "ARTCC HIGH", "ARTCC", "SID", "STAR", "SECTORLINES", "RUNWAYS"];
+
+    private string MapKey(SectorFile s, Theme theme)
     {
+        var key = new System.Text.StringBuilder();
+        key.Append(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(s)).Append('|').Append(_projection.Center)
+           .Append('|').Append(Profile.UseSectorFileColors)
+           .Append('|').Append(theme.Region).Append(theme.Geo).Append(theme.LowAirway).Append(theme.HighAirway).Append(theme.ArtccLow)
+           .Append(theme.ArtccHigh).Append(theme.Artcc).Append(theme.Sid).Append(theme.Star).Append(theme.SectorLine).Append(theme.Runway);
+        foreach (var layer in MapLayers) key.Append(Profile.IsLayerVisible(layer) ? '1' : '0');
+        foreach (var layer in s.CustomLayers) key.Append('|').Append(layer).Append(Profile.IsLayerVisible(layer) ? '1' : '0');
+        return key.ToString();
+    }
+
+    private Point ToPlane(GeoPoint p)
+    {
+        var (x, y) = _projection.ToPlane(p);
+        return new Point(x, y);
+    }
+
+    private List<MapPiece> BuildMap(SectorFile s, Theme theme)
+    {
+        var pieces = new List<MapPiece>();
+
         if (Profile.IsLayerVisible("REGIONS"))
         {
-            foreach (var region in s.Regions)
+            foreach (var group in s.Regions.Where(r => r.Points.Count > 2).GroupBy(r => MapColor(r.Color, theme.Region)))
+            {
+                var geo = new StreamGeometry { FillRule = FillRule.Nonzero };
+                using (var ctx = geo.Open())
+                    foreach (var region in group)
+                    {
+                        ctx.BeginFigure(ToPlane(region.Points[0]), true, true);
+                        for (int i = 1; i < region.Points.Count; i++) ctx.LineTo(ToPlane(region.Points[i]), false, false);
+                    }
+                geo.Freeze();
+                pieces.Add(new MapPiece(geo, group.Key, null, false, false));
+            }
+        }
+
+        void AddLines(IEnumerable<SectorLine> lines, Func<SectorLine, string> color, bool dashed)
+        {
+            foreach (var group in lines.GroupBy(color))
             {
                 var geo = new StreamGeometry();
                 using (var ctx = geo.Open())
-                {
-                    ctx.BeginFigure(ToScreen(region.Points[0]), true, true);
-                    for (int i = 1; i < region.Points.Count; i++) ctx.LineTo(ToScreen(region.Points[i]), false, false);
-                }
+                    foreach (var l in group)
+                    {
+                        ctx.BeginFigure(ToPlane(l.From), false, false);
+                        ctx.LineTo(ToPlane(l.To), true, false);
+                    }
                 geo.Freeze();
-                dc.DrawGeometry(Paint.Brush(MapColor(region.Color, theme.Region)), null, geo);
+                pieces.Add(new MapPiece(geo, null, group.Key, dashed, false));
             }
         }
 
@@ -232,49 +285,84 @@ public sealed class RadarView : FrameworkElement
         {
             if (!Profile.IsLayerVisible(layer) || !s.Lines.TryGetValue(layer, out var lines)) continue;
             string layerColor = s.LayerColors.TryGetValue(layer, out var lc) && Profile.UseSectorFileColors ? lc : color;
-            DrawLines(dc, lines, l => MapColor(l.Color, layerColor), dashed);
+            AddLines(lines, l => MapColor(l.Color, layerColor), dashed);
         }
         // Layers that only exist in Network-ATC sectors always use their own colors.
         foreach (var layer in s.CustomLayers)
         {
             if (!Profile.IsLayerVisible(layer)) continue;
             string layerColor = s.LayerColors.GetValueOrDefault(layer, theme.Geo);
-            DrawLines(dc, s.Lines[layer], l => l.Color ?? layerColor, false);
+            AddLines(s.Lines[layer], l => l.Color ?? layerColor, false);
         }
 
         if (Profile.IsLayerVisible("SECTORLINES"))
         {
-            var pen = Paint.Pen(theme.SectorLine, 1, dashed: true);
-            foreach (var line in s.SectorLines.Values)
-                for (int i = 1; i < line.Count; i++) dc.DrawLine(pen, ToScreen(line[i - 1]), ToScreen(line[i]));
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+                foreach (var line in s.SectorLines.Values.Where(l => l.Count > 1))
+                {
+                    ctx.BeginFigure(ToPlane(line[0]), false, false);
+                    for (int i = 1; i < line.Count; i++) ctx.LineTo(ToPlane(line[i]), true, false);
+                }
+            geo.Freeze();
+            pieces.Add(new MapPiece(geo, null, theme.SectorLine, true, false));
         }
 
         if (Profile.IsLayerVisible("RUNWAYS"))
         {
-            double width = Math.Clamp(0.03 / _nmPerPixel, 1.5, 6);
-            foreach (var r in s.Runways) dc.DrawLine(Paint.Pen(theme.Runway, width), ToScreen(r.End1), ToScreen(r.End2));
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+                foreach (var r in s.Runways)
+                {
+                    ctx.BeginFigure(ToPlane(r.End1), false, false);
+                    ctx.LineTo(ToPlane(r.End2), true, false);
+                }
+            geo.Freeze();
+            pieces.Add(new MapPiece(geo, null, theme.Runway, false, true));
+        }
+        return pieces;
+    }
+
+    private void DrawSector(DrawingContext dc, SectorFile s, Theme theme)
+    {
+        string key = MapKey(s, theme);
+        if (key != _mapKey)
+        {
+            _mapPieces = BuildMap(s, theme);
+            _mapKey = key;
+        }
+        // Plane (NM, north up) to screen: the same formula as ToScreen, as one matrix.
+        double k = 1 / _nmPerPixel;
+        var view = new MatrixTransform(k, 0, 0, -k, ActualWidth / 2 - _cx * k, ActualHeight / 2 + _cy * k);
+        view.Freeze();
+        // Rounded to half pixels: pens are cached by width, a continuous width would fill the cache while zooming.
+        double runwayWidth = Math.Round(Math.Clamp(0.03 / _nmPerPixel, 1.5, 6) * 2) / 2;
+        foreach (var piece in _mapPieces)
+        {
+            // The transform sits on the geometry, not on the drawing context, so lines keep their width in pixels.
+            var placed = new GeometryGroup { Transform = view, FillRule = FillRule.Nonzero };
+            placed.Children.Add(piece.Geometry);
+            dc.DrawGeometry(piece.Fill != null ? Paint.Brush(piece.Fill) : null,
+                piece.Stroke != null ? Paint.Pen(piece.Stroke, piece.Runway ? runwayWidth : 1, piece.Dashed) : null, placed);
         }
 
         bool names = _nmPerPixel < 0.25;
         if (Profile.IsLayerVisible("FIXES"))
         {
-            var pen = Paint.Pen(theme.Fix, 1);
             bool fixNames = Profile.IsLayerVisible("FIX NAMES") && names;
-            foreach (var f in s.Fixes)
-            {
-                var p = ToScreen(f.Position);
-                if (!OnScreen(p)) continue;
-                var tri = new StreamGeometry();
-                using (var ctx = tri.Open())
+            var triangles = new StreamGeometry();
+            using (var ctx = triangles.Open())
+                foreach (var f in s.Fixes)
                 {
+                    var p = ToScreen(f.Position);
+                    if (!OnScreen(p)) continue;
                     ctx.BeginFigure(new Point(p.X, p.Y - 3.5), false, true);
                     ctx.LineTo(new Point(p.X + 3, p.Y + 2.5), true, false);
                     ctx.LineTo(new Point(p.X - 3, p.Y + 2.5), true, false);
+                    if (fixNames) DrawSmallText(dc, f.Name, new Point(p.X + 5, p.Y - 6), theme.Fix);
                 }
-                tri.Freeze();
-                dc.DrawGeometry(null, pen, tri);
-                if (fixNames) DrawSmallText(dc, f.Name, new Point(p.X + 5, p.Y - 6), theme.Fix);
-            }
+            triangles.Freeze();
+            dc.DrawGeometry(null, Paint.Pen(theme.Fix, 1), triangles);
         }
         if (Profile.IsLayerVisible("VOR"))
         {
@@ -316,16 +404,6 @@ public sealed class RadarView : FrameworkElement
         }
         if (Profile.IsLayerVisible("FREETEXT"))
             foreach (var l in s.FreeTexts) DrawSmallText(dc, l.Text, ToScreen(l.Position), theme.Label);
-    }
-
-    private void DrawLines(DrawingContext dc, IEnumerable<SectorLine> lines, Func<SectorLine, string> color, bool dashed)
-    {
-        foreach (var l in lines)
-        {
-            Point a = ToScreen(l.From), b = ToScreen(l.To);
-            if (!OnScreen(a, 4000) && !OnScreen(b, 4000)) continue;
-            dc.DrawLine(Paint.Pen(color(l), 1, dashed), a, b);
-        }
     }
 
     /// <summary>Extended centerlines of the active arrival runways, 15 NM with a tick every 5 NM.</summary>
@@ -564,8 +642,7 @@ public sealed class RadarView : FrameworkElement
         var emergencyBrush = Paint.Brush(theme.EmergencyCallsign);
         double size = Profile.Tags.FontSize, lineHeight = Math.Round(size * 1.3);
 
-        FormattedText MeasureText(string text, Brush b) =>
-            new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _tagTypeface, size, b, dip);
+        FormattedText MeasureText(string text, Brush b) => CachedText(text, b, size, _tagTypeface);
 
         // Measure every span so each field gets its own clickable rectangle.
         Brush SpanBrush(TagSpan span)
@@ -636,12 +713,31 @@ public sealed class RadarView : FrameworkElement
         }
     }
 
+    /// <summary>
+    /// Laid-out texts by (text, brush, size, typeface): map labels and tag lines repeat from frame to frame, and laying
+    /// out text is the most expensive part of drawing them.
+    /// </summary>
+    private readonly Dictionary<(string Text, Brush Brush, double Size, Typeface Face), FormattedText> _textCache = [];
+    private double _textDip;
+
+    private FormattedText CachedText(string text, Brush brush, double size, Typeface face)
+    {
+        double dip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        if (dip != _textDip || _textCache.Count > 6000)
+        {
+            _textCache.Clear();
+            _textDip = dip;
+        }
+        var key = (text, brush, size, face);
+        if (!_textCache.TryGetValue(key, out var ft))
+            _textCache[key] = ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, size, brush, dip);
+        return ft;
+    }
+
     private void DrawSmallText(DrawingContext dc, string text, Point at, string color, double size = 10)
     {
         if (!OnScreen(at)) return;
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, UiTypeface, size,
-            Paint.Brush(color), VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        dc.DrawText(ft, at);
+        dc.DrawText(CachedText(text, Paint.Brush(color), size, UiTypeface), at);
     }
 
     private void DrawScaleBar(DrawingContext dc, Theme theme)

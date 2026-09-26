@@ -16,12 +16,18 @@
     <SolidColorBrush x:Key="HoverBrush" Color="#1E252B"/>
     <!-- The selected aircraft (ASEL), from the theme's TagSelected. -->
     <SolidColorBrush x:Key="SelectBrush" Color="#F4D26B"/>
-    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
+    <!-- Title strip of the floating windows, a shade above the panel. -->
+    <SolidColorBrush x:Key="HeaderBrush" Color="#1C2329"/>
+    <!-- ATIS letters and warnings, from the theme's Warning color. -->
+    <SolidColorBrush x:Key="WarningBrush" Color="#E0B25C"/>
+    <!-- IBM Plex is embedded (Fonts folder); Windows fonts are the fallback. -->
+    <FontFamily x:Key="MonoFont">pack://application:,,,/Fonts/#IBM Plex Mono, Consolas</FontFamily>
+    <FontFamily x:Key="UiFont">pack://application:,,,/Fonts/#IBM Plex Sans Condensed, Segoe UI</FontFamily>
 
     <Style x:Key="AtcWindow" TargetType="Window">
       <Setter Property="Background" Value="{DynamicResource BgBrush}"/>
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-      <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/>
+      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
       <Setter Property="FontSize" Value="12.5"/>
     </Style>
 
@@ -261,12 +267,12 @@
       <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
     </Style>
     <Style TargetType="ListBoxItem">
-      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="Padding" Value="10,3"/>
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ListBoxItem">
-            <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}">
               <ContentPresenter/>
             </Border>
             <ControlTemplate.Triggers>
@@ -275,7 +281,7 @@
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}"/>
-                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource SelectBrush}"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -371,7 +377,7 @@
             <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
               <DockPanel>
                 <Grid DockPanel.Dock="Top" Height="24">
-                  <Border Background="{DynamicResource HoverBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"/>
+                  <Border Background="{DynamicResource HeaderBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"/>
                   <Thumb x:Name="PART_Title" Cursor="SizeAll" Opacity="0"/>
                   <TextBlock Text="{TemplateBinding Header}" Margin="10,0,28,0" FontSize="10.5" FontWeight="SemiBold"
                              Foreground="{DynamicResource MutedBrush}" IsHitTestVisible="False"/>
@@ -411,6 +417,28 @@
       <Setter Property="Padding" Value="9,3"/>
       <Setter Property="FontSize" Value="11.5"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <!-- Text field inside the top bar: no frame, just the digits and a hairline under them. -->
+    <Style x:Key="BarBox" TargetType="TextBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+              <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <!-- Top bar keys: flat text, the full height of the bar; an open panel is underlined. -->
     <Style x:Key="BarButton" TargetType="Button">

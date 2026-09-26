@@ -40,7 +40,9 @@ public sealed class TagLayouts
     ];
 
     public double FontSize { get; set; } = 11;
-    public string FontFamily { get; set; } = "Cascadia Mono, Consolas";
+    public string FontFamily { get; set; } = "IBM Plex Mono";
+    /// <summary>The tag font before version 8.</summary>
+    public const string OldFontFamily = "Cascadia Mono, Consolas";
     public bool ShowTagLeader { get; set; } = true;
     public double DefaultOffsetX { get; set; } = 18;
     public double DefaultOffsetY { get; set; } = -30;
@@ -158,7 +160,7 @@ public sealed class PanelSettings
 public sealed class Profile
 {
     /// <summary>Profile format version, used to migrate old profiles.</summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 8;
     public int Version { get; set; }
 
     public string Name { get; set; } = "Default";
@@ -442,6 +444,8 @@ public sealed class Profile
                 if (p.Version < 6) MigrateToEnglish(p);
                 // Version 7: new default look (Graphite). A profile that kept the old default takes it; own colors stay.
                 if (p.Version < 7 && p.Theme != null && Theme.IsVersion6Default(p.Theme)) p.Theme = new Theme();
+                // Version 8: IBM Plex Mono comes with the program and is the tag font, unless another was chosen.
+                if (p.Version < 8 && p.Tags != null && p.Tags.FontFamily == TagLayouts.OldFontFamily) p.Tags.FontFamily = new TagLayouts().FontFamily;
                 if (p.Version < 2)
                 {
                     // Version 2 introduced the SkyNetwork look (between Aurora and EuroScope).

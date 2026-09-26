@@ -12,72 +12,54 @@
       <RowDefinition Height="36"/>
     </Grid.RowDefinitions>
 
-    <!-- Top bar laid out like EuroScope: menu keys on the left, the controller's station, the METAR strip,
-         then view range and UTC on the right. -->
+    <!-- Top bar, left to right: wordmark | station (click: connect) | menu keys ... weather | FL filter, range | UTC clock. -->
     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-          <!-- Wordmark: a framed square and the name, set apart by a hairline. -->
           <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="14,0" Height="39">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="Network-ATC">
-              <Border Width="16" Height="16" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5" Margin="0,0,9,0">
-                <Border Width="5" Height="5" Background="{DynamicResource AccentBrush}"/>
+              <Border Width="18" Height="18" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5" Margin="0,0,10,0">
+                <Border Width="6" Height="6" Background="{DynamicResource AccentBrush}"/>
               </Border>
-              <TextBlock Text="NETWORK-ATC" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+              <TextBlock Text="NETWORK-ATC" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
             </StackPanel>
           </Border>
-          <Button x:Name="FileButton" Content="FILE ▾" Style="{StaticResource BarButton}" Click="OnFileClick"
+          <!-- The controller's station: a dot, the callsign and the primary frequency; CONNECT while offline. -->
+          <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource BarButton}" Padding="16,0"
+                  BorderBrush="Transparent" ToolTip="Connect to the network / disconnect">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse x:Name="ConnectDot" Width="7" Height="7" Fill="{DynamicResource DangerBrush}" Margin="0,0,12,0"/>
+              <TextBlock x:Name="ConnectText" Text="CONNECT" FontFamily="{StaticResource MonoFont}" FontSize="14" FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextBrush}"/>
+              <TextBlock x:Name="FrequencyText" FontFamily="{StaticResource MonoFont}" FontSize="14" FontWeight="Normal" Margin="12,0,0,0"
+                         Foreground="{DynamicResource AccentBrush}"/>
+            </StackPanel>
+          </Button>
+          <Border Width="1" Height="39" Background="{DynamicResource BorderBrush}"/>
+          <Button x:Name="FileButton" Content="FILE" Style="{StaticResource BarButton}" Click="OnFileClick"
                   ToolTip="Sector, EuroScope profile import, recent sectors"/>
           <ToggleButton x:Name="LayersButton" Content="MAPS" Style="{StaticResource BarToggle}" Click="OnLayersClick" ToolTip="Map layers (F6)"/>
-          <Button x:Name="ListsButton" Content="LISTS ▾" Style="{StaticResource BarButton}" Click="OnListsClick"/>
+          <Button x:Name="ListsButton" Content="LISTS" Style="{StaticResource BarButton}" Click="OnListsClick"/>
           <Button Content="RWY" Style="{StaticResource BarButton}" Click="OnRunwaysClick" ToolTip="Active airports, runways and ATIS (Ctrl+R)"/>
           <Button x:Name="VoiceButton" Style="{StaticResource BarButton}" Click="OnVoiceClick" ToolTip="Voice: frequencies, push-to-talk, audio">
             <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="VoiceDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+              <Ellipse x:Name="VoiceDot" Width="6" Height="6" Fill="{DynamicResource MutedBrush}" Margin="0,0,7,0"/>
               <TextBlock Text="RADIO"/>
             </StackPanel>
           </Button>
           <Button x:Name="AtisButton" Style="{StaticResource BarButton}" Click="OnAtisClick" ToolTip="ATIS stations: text for pilots and voice on air">
             <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="AtisDot" Width="7" Height="7" Fill="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+              <Ellipse x:Name="AtisDot" Width="6" Height="6" Fill="{DynamicResource MutedBrush}" Margin="0,0,7,0"/>
               <TextBlock x:Name="AtisLabel" Text="ATIS"/>
             </StackPanel>
           </Button>
-          <Button x:Name="PluginsButton" Content="PLUGINS ▾" Style="{StaticResource BarButton}" Click="OnPluginsClick"
+          <Button x:Name="PluginsButton" Content="PLUGINS" Style="{StaticResource BarButton}" Click="OnPluginsClick"
                   ToolTip="Network-ATC plugins and EuroScope plugin data"/>
           <Button Content="SETTINGS" Style="{StaticResource BarButton}" Click="OnSettingsClick"/>
-          <Border Width="1" Height="39" Background="{DynamicResource BorderBrush}"/>
-          <Button x:Name="ConnectButton" Click="OnConnectClick" Style="{StaticResource BarButton}">
-            <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="ConnectDot" Width="7" Height="7" Fill="{DynamicResource DangerBrush}" Margin="0,0,6,0"/>
-              <TextBlock x:Name="ConnectText" Text="CONNECT"/>
-            </StackPanel>
-          </Button>
-          <!-- The controller's own station, as in the EuroScope top bar. -->
-          <Border x:Name="StationBox" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0" Padding="14,0" Height="39"
-                  Visibility="Collapsed">
-            <TextBlock x:Name="StationText" Text="" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextBrush}"/>
-          </Border>
         </StackPanel>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-          <!-- Altitude filter, hundreds of feet (EuroScope's filter below / above). -->
-          <TextBlock Text="FILTER" Style="{StaticResource Muted}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-          <TextBox x:Name="FilterLowBox" Width="40" Height="22" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Center"
-                   ToolTip="Hide aircraft below, hundreds of feet (0 = no filter)" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
-          <TextBlock Text="–" Style="{StaticResource Muted}" Margin="3,0" VerticalAlignment="Center"/>
-          <TextBox x:Name="FilterHighBox" Width="40" Height="22" FontFamily="{StaticResource MonoFont}" VerticalContentAlignment="Center"
-                   ToolTip="Hide aircraft above, hundreds of feet" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
-          <TextBlock x:Name="SectorText" Text="No sector" Style="{StaticResource Muted}" Margin="10,0,12,0" MaxWidth="260" TextTrimming="CharacterEllipsis"/>
-          <TextBlock x:Name="RangeText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,12,0"/>
-          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="16,0" Height="39" Background="{DynamicResource BgBrush}">
-            <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextBrush}"/>
-          </Border>
-        </StackPanel>
-        <!-- METAR strip of the active airports: ATIS letter, wind and QNH; the full METAR in the tooltip. -->
-        <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" Margin="10,0,0,0" VerticalAlignment="Center">
-          <ItemsControl x:Name="WeatherStrip">
+          <!-- METAR strip of the active airports: code, ATIS letter, wind and QNH; the full METAR in the tooltip. -->
+          <ItemsControl x:Name="WeatherStrip" VerticalAlignment="Center" Margin="0,0,6,0">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
                 <StackPanel Orientation="Horizontal"/>
@@ -85,18 +67,38 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="8,0" Height="24" Margin="0,0,6,0"
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="9,0" Height="26" Margin="0,0,6,0"
                         Background="{DynamicResource BgBrush}" ToolTip="{Binding Raw}">
                   <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Station}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" Margin="0,0,5,0"/>
-                    <TextBlock Text="{Binding Atis}" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold" FontFamily="{StaticResource MonoFont}" Margin="0,0,5,0"/>
+                    <TextBlock Text="{Binding Station}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" Margin="0,0,8,0"
+                               Foreground="{DynamicResource TextBrush}"/>
+                    <TextBlock Text="{Binding Atis}" Foreground="{DynamicResource WarningBrush}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" Margin="0,0,8,0"/>
                     <TextBlock Text="{Binding Summary}" FontFamily="{StaticResource MonoFont}" Style="{StaticResource Muted}"/>
                   </StackPanel>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
-        </ScrollViewer>
+          <!-- Altitude filter (hundreds of feet) and the view range. -->
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="16,0" Height="39">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="FL" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" Margin="0,0,6,0"/>
+              <TextBox x:Name="FilterLowBox" Width="34" Style="{StaticResource BarBox}"
+                       ToolTip="Hide aircraft below, hundreds of feet (0 = no filter)" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
+              <TextBlock Text="–" Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource MonoFont}" Margin="1,0"/>
+              <TextBox x:Name="FilterHighBox" Width="34" Style="{StaticResource BarBox}"
+                       ToolTip="Hide aircraft above, hundreds of feet" KeyDown="OnFilterKeyDown" LostFocus="OnFilterChanged"/>
+              <TextBlock x:Name="RangeText" FontFamily="{StaticResource MonoFont}" Margin="16,0,0,0" Foreground="{DynamicResource TextBrush}"/>
+              <!-- Kept for the code that fills it; the sector name is not shown in the bar. -->
+              <TextBlock x:Name="SectorText" Visibility="Collapsed"/>
+            </StackPanel>
+          </Border>
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="18,0" Height="39" Background="{DynamicResource BgBrush}">
+            <TextBlock x:Name="ClockText" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="17" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextBrush}"/>
+          </Border>
+        </StackPanel>
+        <Border/>
       </DockPanel>
     </Border>
 
@@ -421,27 +423,42 @@
       </Popup>
     </Grid>
 
-    <!-- Command bar: ASEL (selected aircraft) and the command line, as in EuroScope -->
+    <!-- Command bar: ASEL | › command line | RX (who talks) | TX frequency | cursor position. -->
     <Border Grid.Row="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-      <DockPanel Margin="10,4">
-        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" Width="150">
-          <TextBlock Text="ASEL" Style="{StaticResource Muted}" FontSize="10.5" FontWeight="SemiBold" Margin="0,0,8,0"/>
-          <TextBlock x:Name="AselText" Text="—" FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" Foreground="{DynamicResource SelectBrush}"/>
-        </StackPanel>
+      <DockPanel>
+        <Border DockPanel.Dock="Left" Width="160" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="14,0">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="ASEL" Style="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,10,0"/>
+            <TextBlock x:Name="AselText" Text="—" FontFamily="{StaticResource MonoFont}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource SelectBrush}"/>
+          </StackPanel>
+        </Border>
         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-          <TextBlock x:Name="RxText" FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"
-                     MaxWidth="420" TextTrimming="CharacterEllipsis" Margin="12,0,0,0" ToolTip="Who is transmitting now"/>
-          <Button x:Name="PttButton" Content="PTT" Style="{StaticResource MenuButton}" Margin="10,0,0,0" Visibility="Collapsed"
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="14,0">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="RX" Style="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" Margin="0,0,8,0"/>
+              <TextBlock x:Name="RxText" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource AccentBrush}"
+                         MinWidth="60" MaxWidth="420" TextTrimming="CharacterEllipsis" ToolTip="Who is transmitting now"/>
+            </StackPanel>
+          </Border>
+          <Button x:Name="PttButton" Content="PTT" Style="{StaticResource MenuButton}" Margin="8,0,0,0" Visibility="Collapsed"
                   PreviewMouseLeftButtonDown="OnPttDown" PreviewMouseLeftButtonUp="OnPttUp" LostMouseCapture="OnPttLost"
                   ToolTip="Hold to talk (push-to-talk)"/>
           <!-- Primary frequency; turns red while transmitting. -->
-          <Border x:Name="TxBadge" CornerRadius="3" Padding="6,1" Margin="6,0" VerticalAlignment="Center">
-            <TextBlock x:Name="TxText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}"/>
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="14,0">
+            <Border x:Name="TxBadge" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="7,2" VerticalAlignment="Center">
+              <TextBlock x:Name="TxText" FontFamily="{StaticResource MonoFont}" FontSize="12.5" Foreground="{DynamicResource TextBrush}"/>
+            </Border>
           </Border>
-          <TextBlock x:Name="CursorText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="11" Width="210"/>
+          <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0" Padding="14,0" Width="220">
+            <TextBlock x:Name="CursorText" Style="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="11.5"/>
+          </Border>
         </StackPanel>
-        <TextBox x:Name="CommandLine" FontFamily="{StaticResource MonoFont}" Padding="8,2" KeyDown="OnCommandKeyDown"
-                 ToolTip="Message on the primary frequency or a .command (.help). Points picked on the radar go here."/>
+        <DockPanel Margin="12,0">
+          <TextBlock DockPanel.Dock="Left" Text="›" Foreground="{DynamicResource AccentBrush}" FontFamily="{StaticResource MonoFont}" FontSize="14" Margin="0,0,8,0"/>
+          <TextBox x:Name="CommandLine" Style="{StaticResource BarBox}" BorderThickness="0" FontSize="13" HorizontalContentAlignment="Left"
+                   KeyDown="OnCommandKeyDown"
+                   ToolTip="Message on the primary frequency or a .command (.help). Points picked on the radar go here."/>
+        </DockPanel>
       </DockPanel>
     </Border>
   </Grid>

@@ -560,6 +560,17 @@ public class ProfileMigrationTests
     }
 
     [Fact]
+    public void Version7Profile_WithTheOldTagFont_GetsIbmPlexMono_OtherFontsStay()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, $$"""{ "Version": 7, "Tags": { "FontFamily": "{{TagLayouts.OldFontFamily}}" } }""");
+        Assert.Equal("IBM Plex Mono", Profile.Load(path).Tags.FontFamily);
+        File.WriteAllText(path, """{ "Version": 7, "Tags": { "FontFamily": "Lucida Console" } }""");
+        Assert.Equal("Lucida Console", Profile.Load(path).Tags.FontFamily);
+        File.Delete(path);
+    }
+
+    [Fact]
     public void BuiltInThemes_AreTheDefaultGreyConsoleAndPolarNight_AndValid()
     {
         Assert.Equal(["Graphite", "Grey Console", "Polar Night"], Theme.BuiltIn.Select(t => t.Name).ToArray());
