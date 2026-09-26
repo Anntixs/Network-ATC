@@ -138,4 +138,52 @@ public class AtisTests
         Assert.False(b.OnAir);
         Assert.True(sender.Frames[^1].Last);
     }
+
+    [Fact]
+    public void VatisProfileBecomesStationsWithPresets()
+    {
+        const string json = """
+        {
+          "name": "Moscow",
+          "stations": [
+            {
+              "identifier": "uuee",
+              "name": "Sheremetyevo",
+              "atisType": "Arrival",
+              "frequency": 128050000,
+              "atisVoice": { "useTextToSpeech": true },
+              "contractions": [ { "variableName": "ILS", "text": "ILS APPROACH", "voice": "I L S approach" } ],
+              "airportConditionDefinitions": [ { "text": "BIRD ACTIVITY", "enabled": true }, { "text": "OFF", "enabled": false } ],
+              "presets": [
+                {
+                  "name": "West",
+                  "template": "[FACILITY] ATIS INFORMATION [ATIS_CODE] [OBS_TIME]. EXPECT @ILS. [FULL_WX_STRING]. [ARPT_COND] [NOTAMS] ADVISE YOU HAVE [ATIS_CODE]. [VOICE:spoken only][TEXT:TL 60]",
+                  "airportConditions": "RWY 24L CLOSED",
+                  "notams": "TWY B CLOSED"
+                },
+                { "name": "East", "template": "[FACILITY] INFO [ATIS_CODE] QNH [PRESSURE]" }
+              ]
+            },
+            { "Identifier": "UUDD", "AtisType": "Combined", "Frequency": 128400, "AtisVoice": { "UseTextToSpeech": false } }
+          ]
+        }
+        """;
+        var stations = VatisImport.Parse(json);
+        Assert.Equal(2, stations.Count);
+        var s = stations[0];
+        Assert.Equal(("UUEE", "A", "128.050", "Sheremetyevo", "UUEE_A_ATIS"), (s.Airport, s.Suffix, s.Frequency, s.SpokenName, s.Callsign));
+        Assert.Equal(AtisVoiceMode.Speech, s.Voice);
+        Assert.Equal(["West", "East"], s.Presets.Select(p => p.Name));
+        Assert.Equal("West", s.Preset);
+        Assert.Equal(["$airport ATIS INFORMATION $atiscode($airport) $time. EXPECT ILS APPROACH. $metar($airport). ADVISE YOU HAVE $atiscode($airport). TL 60"], s.Text);
+        Assert.Equal("RWY 24L CLOSED BIRD ACTIVITY TWY B CLOSED", s.Remark);
+        s.ApplyPreset(s.Presets[1]);
+        Assert.Equal(["$airport INFO $atiscode($airport) QNH $qnh($airport)"], s.Text);
+        Assert.Equal(("East", "BIRD ACTIVITY"), (s.Preset, s.Remark)); // conditions switched on for the station apply to every preset
+
+        var d = stations[1];
+        Assert.Equal(("UUDD", "", "128.400", AtisVoiceMode.None), (d.Airport, d.Suffix, d.Frequency, d.Voice));
+        Assert.Equal(AtisSettings.DefaultText, d.Text);
+        Assert.Throws<FormatException>(() => VatisImport.Parse("""{ "name": "x" }"""));
+    }
 }

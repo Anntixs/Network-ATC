@@ -215,14 +215,15 @@ public sealed class RadarView : FrameworkElement
     /// <summary>The layer the sector map is drawn into (under this element); null draws the map here, every frame.</summary>
     public MapLayer? Map { get; set; }
 
-    /// <summary>How long the view must stay still before the moved map picture is redrawn crisply.</summary>
-    private static readonly TimeSpan MapSettle = TimeSpan.FromMilliseconds(140);
+    /// <summary>How long a dragged view must stay still before the map is redrawn around the new center.</summary>
+    private static readonly TimeSpan MapSettle = TimeSpan.FromMilliseconds(250);
     private readonly System.Windows.Threading.DispatcherTimer _mapSettleTimer = new() { Interval = MapSettle };
     private (double Cx, double Cy, double NmPerPixel, double W, double H) _mapDrawnView, _lastView;
     private DateTime _lastViewChange;
     private string _mapContentKey = "";
-    /// <summary>While the map is drawn, things this far outside the screen are drawn too, so panning shows them.</summary>
+    /// <summary>While the map is drawn, things this far outside the screen are drawn too, so dragging shows them.</summary>
     private double _cullMargin;
+    private double _mapDrawnMargin;
 
     private string MapContentKey(Theme theme)
     {
@@ -236,8 +237,9 @@ public sealed class RadarView : FrameworkElement
     }
 
     /// <summary>
-    /// Keeps the map layer in step with the view: while the view moves the last picture is only shifted and scaled
-    /// (cheap, on the graphics card); once it has been still for a moment, or the map itself changed, it is redrawn.
+    /// Keeps the map layer in step with the view. The map stays vector drawing, so it is always sharp: a zoom, a new
+    /// window size or a change of the map redraws it at once; a drag only shifts it (lines keep their width), and it is
+    /// redrawn around the new center when the view stops or the drag nears the edge of what was drawn.
     /// </summary>
     private void UpdateMap(Theme theme)
     {
@@ -249,18 +251,17 @@ public sealed class RadarView : FrameworkElement
             _lastViewChange = now;
         }
         string key = MapContentKey(theme);
-        bool sizeChanged = view.ActualWidth != _mapDrawnView.W || view.ActualHeight != _mapDrawnView.H;
-        if (key != _mapContentKey || sizeChanged || (view != _mapDrawnView && now - _lastViewChange >= MapSettle))
+        if (view == _mapDrawnView && key == _mapContentKey) return;
+        // Pixels the view moved since the map was drawn (same zoom): screen = (x - cx) / nmPerPixel + W / 2.
+        double dx = (_mapDrawnView.Cx - _cx) / _nmPerPixel, dy = (_cy - _mapDrawnView.Cy) / _nmPerPixel;
+        bool sameZoomAndSize = _nmPerPixel == _mapDrawnView.NmPerPixel && ActualWidth == _mapDrawnView.W && ActualHeight == _mapDrawnView.H;
+        bool withinDrawn = Math.Abs(dx) < _mapDrawnMargin * 0.8 && Math.Abs(dy) < _mapDrawnMargin * 0.8;
+        if (key != _mapContentKey || !sameZoomAndSize || !withinDrawn || now - _lastViewChange >= MapSettle)
         {
             RenderMap(theme, key, view);
             return;
         }
-        if (view == _mapDrawnView) return;
-        // Drawn: screen = k0 * (x, -y) + b0; now: k1 * (x, -y) + b1. So now = s * drawn + (b1 - s * b0), s = k1 / k0.
-        double k0 = 1 / _mapDrawnView.NmPerPixel, k1 = 1 / _nmPerPixel, s = k1 / k0;
-        double b0x = _mapDrawnView.W / 2 - _mapDrawnView.Cx * k0, b0y = _mapDrawnView.H / 2 + _mapDrawnView.Cy * k0;
-        double b1x = ActualWidth / 2 - _cx * k1, b1y = ActualHeight / 2 + _cy * k1;
-        Map!.Follow(new Matrix(s, 0, 0, s, b1x - s * b0x, b1y - s * b0y));
+        Map!.Follow(dx, dy);
         if (!_mapSettleTimer.IsEnabled)
         {
             _mapSettleTimer.Tick -= OnMapSettle;
@@ -294,6 +295,7 @@ public sealed class RadarView : FrameworkElement
         }
         _mapContentKey = key;
         _mapDrawnView = view;
+        _mapDrawnMargin = HideOwnContent ? double.MaxValue : Math.Max(ActualWidth, ActualHeight) * 0.6;
     }
 
     private string MapColor(string? fileColor, string themeColor) =>
