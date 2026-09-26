@@ -12,6 +12,18 @@ public enum Facility
     Tower = 4,
     Approach = 5,
     Centre = 6,
+    // Staff positions (XXX_SUP, XXX_ADM). Not FSD facilities: on the network they log in as observers.
+    Supervisor = 7,
+    Administrator = 8,
+}
+
+public static class FacilityExtensions
+{
+    /// <summary>The facility code sent to the network and to EuroScope plugins (0–6).</summary>
+    public static int Wire(this Facility f) => f is Facility.Supervisor or Facility.Administrator ? 0 : (int)f;
+
+    /// <summary>Lowest rating allowed for the facility: SUP (11) for supervisors, ADM (12) for administrators.</summary>
+    public static int MinimumRating(this Facility f) => f switch { Facility.Supervisor => 11, Facility.Administrator => 12, _ => 1 };
 }
 
 public sealed record PilotReport(
@@ -40,7 +52,7 @@ public static class AtcPackets
 
     /// <summary>%&lt;cs&gt;:&lt;freq&gt;:&lt;facility&gt;:&lt;range&gt;:&lt;rating&gt;:&lt;lat&gt;:&lt;lon&gt;:0 — frequency 118.100 is sent as 18100.</summary>
     public static string Position(string callsign, int frequencyKhz, Facility facility, int visualRange, int rating, GeoPoint at) =>
-        string.Create(Inv, $"%{callsign}:{frequencyKhz - 100000}:{(int)facility}:{visualRange}:{rating}:{at.Latitude:0.000000}:{at.Longitude:0.000000}:0");
+        string.Create(Inv, $"%{callsign}:{frequencyKhz - 100000}:{facility.Wire()}:{visualRange}:{rating}:{at.Latitude:0.000000}:{at.Longitude:0.000000}:0");
 
     public static string TextMessage(string from, string to, string text) => $"#TM{from}:{to}:{Clean(text)}";
 

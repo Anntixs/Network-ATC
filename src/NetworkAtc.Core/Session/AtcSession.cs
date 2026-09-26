@@ -66,6 +66,8 @@ public sealed partial class AtcSession : IAsyncDisposable
         var c when c.EndsWith("_APP") || c.EndsWith("_DEP") => Facility.Approach,
         var c when c.EndsWith("_CTR") => Facility.Centre,
         var c when c.EndsWith("_FSS") => Facility.FlightService,
+        var c when c.EndsWith("_SUP") => Facility.Supervisor,
+        var c when c.EndsWith("_ADM") => Facility.Administrator,
         _ => Facility.Observer,
     };
 

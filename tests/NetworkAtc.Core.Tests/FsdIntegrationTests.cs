@@ -141,8 +141,8 @@ public class FsdIntegrationTests
         var dir = Directory.CreateTempSubdirectory("natc");
         string db = Path.Combine(dir.FullName, "net.db");
         Run("skynet-admin", $"--db {db} adduser 1000001 \"Pilot One\" pw1");
-        Run("skynet-admin", $"--db {db} adduser 1000002 \"Facility Sup\" pw2 S3");
-        Run("skynet-admin", $"--db {db} fsup 1000002 on");
+        Run("skynet-admin", $"--db {db} adduser 1000002 \"Network Sup\" pw2 C1");
+        Run("skynet-admin", $"--db {db} staff 1000002 SUP");
         int port = FreePort(), httpPort = FreePort();
         using var fsd = Process.Start(new ProcessStartInfo(Path.Combine(Build, "skynet-fsd"),
             $"--db {db} --host 127.0.0.1 --port {port} --http-port {httpPort}") { RedirectStandardError = true })!;
@@ -154,8 +154,8 @@ public class FsdIntegrationTests
             sup.MessageReceived += (_, m) => { lock (messages) messages.Add(m); };
             (string Callsign, GeoPoint Position)? found = null;
             sup.ServerFound += (_, f) => found = f;
-            await sup.ConnectAsync(new AtcConnectInfo("127.0.0.1", port, 1000002, "pw2", "Facility Sup", 4,
-                "UUWV_FSS", 122800, Facility.FlightService, 50, new GeoPoint(55.97, 37.41)));
+            await sup.ConnectAsync(new AtcConnectInfo("127.0.0.1", port, 1000002, "pw2", "Network Sup", 11,
+                "SKY_SUP", 122800, Facility.Supervisor, 600, new GeoPoint(55.97, 37.41)));
             var cmd = new CommandProcessor(sup, () => new Profile(), new PluginRegistry(), () => null);
 
             // Far out of range: only the server knows where it is.

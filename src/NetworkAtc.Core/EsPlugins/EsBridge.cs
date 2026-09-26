@@ -221,7 +221,7 @@ public sealed class EsBridge : IAsyncDisposable
         string id = _workspace.ShortName(callsign);
         var w = new EsWriter(EsMsg.Myself);
         WriteController(w, callsign, id == callsign ? "" : id, id != callsign, freq, info?.RealName ?? p.Connection.RealName,
-            info?.Rating ?? p.Station.Rating, (int)facility, "", facility != Facility.Observer, center, info?.VisualRange ?? p.Station.VisualRange);
+            info?.Rating ?? p.Station.Rating, facility.Wire(), "", facility.Wire() != 0, center, info?.VisualRange ?? p.Station.VisualRange);
         w.I32(_session.IsConnected ? 1 : 0);
         string sig = $"{callsign}|{freq}|{id}|{facility}|{_session.IsConnected}|{center}";
         if (sig == _sentMyself) return;

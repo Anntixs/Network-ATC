@@ -20,6 +20,7 @@ public partial class ConnectWindow : Window
     [
         (Facility.Observer, "Observer"), (Facility.Delivery, "DEL"), (Facility.Ground, "GND"), (Facility.Tower, "TWR"),
         (Facility.Approach, "APP/DEP"), (Facility.Centre, "CTR"), (Facility.FlightService, "FSS"),
+        (Facility.Supervisor, "SUP"), (Facility.Administrator, "ADM"),
     ];
 
     private readonly Profile _profile;
@@ -39,6 +40,7 @@ public partial class ConnectWindow : Window
         FrequencyBox.Text = st.Frequency;
         FacilityBox.SelectedIndex = Math.Max(0, Array.FindIndex(Facilities, f => f.Value == st.Facility));
         RatingBox.SelectedIndex = Math.Clamp(st.Rating - 1, 0, RatingNames.Length - 1);
+        FacilityBox.SelectionChanged += OnFacilityChanged;
         RangeBox.Text = st.VisualRange.ToString();
         var cn = profile.Connection;
         ServerBox.Text = $"{cn.Host}:{cn.Port}";
@@ -53,6 +55,16 @@ public partial class ConnectWindow : Window
         if (PositionBox.SelectedItem is not PositionItem item) return;
         CallsignBox.Text = item.Position.Callsign;
         FrequencyBox.Text = item.Position.Frequency;
+    }
+
+    // SUP and ADM positions go with the matching rating; they see the whole network.
+    private void OnFacilityChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FacilityBox.SelectedIndex < 0) return;
+        var f = Facilities[FacilityBox.SelectedIndex].Value;
+        int min = f.MinimumRating();
+        if (RatingBox.SelectedIndex + 1 < min) RatingBox.SelectedIndex = min - 1;
+        if (min > 1) RangeBox.Text = "600";
     }
 
     private void OnCallsignChanged(object sender, TextChangedEventArgs e)
@@ -77,11 +89,17 @@ public partial class ConnectWindow : Window
             return;
         }
         if (!int.TryParse(CidBox.Text.Trim(), out var cid) || cid <= 0) { ErrorText.Text = "Enter your CID"; return; }
+        var facility = Facilities[Math.Max(0, FacilityBox.SelectedIndex)].Value;
+        if (RatingBox.SelectedIndex + 1 < facility.MinimumRating())
+        {
+            ErrorText.Text = facility == Facility.Administrator ? "The ADM position needs the ADM rating" : "The SUP position needs the SUP or ADM rating";
+            return;
+        }
 
         var st = _profile.Station;
         st.Callsign = callsign;
         st.Frequency = Frequency.Format(khz);
-        st.Facility = Facilities[Math.Max(0, FacilityBox.SelectedIndex)].Value;
+        st.Facility = facility;
         st.Rating = RatingBox.SelectedIndex + 1;
         st.VisualRange = range;
         var cn = _profile.Connection;
