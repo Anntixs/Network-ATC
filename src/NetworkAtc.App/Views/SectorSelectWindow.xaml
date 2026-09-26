@@ -27,6 +27,12 @@
               <TextBlock Text=".sct / .sct2 (+ .ese alongside)" FontSize="11" Style="{StaticResource Muted}"/>
             </StackPanel>
           </Button>
+          <Button HorizontalContentAlignment="Left" Padding="12,9" Margin="0,8,0,0" Click="OnOpenAsr">
+            <StackPanel>
+              <TextBlock Text="EuroScope display (.asr)…" FontWeight="SemiBold"/>
+              <TextBlock Text="its sector, map elements, plugin display (GRP…)" FontSize="11" Style="{StaticResource Muted}"/>
+            </StackPanel>
+          </Button>
           <Button HorizontalContentAlignment="Left" Padding="12,9" Margin="0,8,0,0" Click="OnOpenGround">
             <StackPanel>
               <TextBlock Text="Ground sector (GRP)…" FontWeight="SemiBold"/>

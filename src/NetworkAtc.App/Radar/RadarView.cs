@@ -332,6 +332,8 @@ public sealed class RadarView : FrameworkElement
            .Append(theme.ArtccHigh).Append(theme.Artcc).Append(theme.Sid).Append(theme.Star).Append(theme.SectorLine).Append(theme.Runway);
         foreach (var layer in MapLayers) key.Append(Profile.IsLayerVisible(layer) ? '1' : '0');
         foreach (var layer in s.CustomLayers) key.Append('|').Append(layer).Append(Profile.IsLayerVisible(layer) ? '1' : '0');
+        foreach (var (layer, items) in Profile.MapItems.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            key.Append('|').Append(layer).Append(':').Append(string.Join('\u0001', items));
         return key.ToString();
     }
 
@@ -341,13 +343,24 @@ public sealed class RadarView : FrameworkElement
         return new Point(x, y);
     }
 
+    /// <summary>Elements shown per layer (from a EuroScope .asr); a layer not in it shows everything.</summary>
+    private Dictionary<string, HashSet<string>> _itemFilter = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool Shown(string layer, string name) =>
+        !_itemFilter.TryGetValue(layer, out var names) || names.Contains(name.Trim());
+
+    private bool FreeTextShown(SectorLabel l) =>
+        !_itemFilter.TryGetValue("FREETEXT", out var names) || names.Contains(l.Group) || names.Contains($"{l.Group}\\{l.Text}");
+
     private List<MapPiece> BuildMap(SectorFile s, Theme theme)
     {
         var pieces = new List<MapPiece>();
+        _itemFilter = Profile.MapItems.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value.Select(v => v.Trim()), StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
 
         if (Profile.IsLayerVisible("REGIONS"))
         {
-            foreach (var group in s.Regions.Where(r => r.Points.Count > 2).GroupBy(r => MapColor(r.Color, theme.Region)))
+            foreach (var group in s.Regions.Where(r => r.Points.Count > 2 && Shown("REGIONS", r.Name)).GroupBy(r => MapColor(r.Color, theme.Region)))
             {
                 var geo = new StreamGeometry { FillRule = FillRule.Nonzero };
                 using (var ctx = geo.Open())
@@ -387,7 +400,7 @@ public sealed class RadarView : FrameworkElement
         {
             if (!Profile.IsLayerVisible(layer) || !s.Lines.TryGetValue(layer, out var lines)) continue;
             string layerColor = s.LayerColors.TryGetValue(layer, out var lc) && Profile.UseSectorFileColors ? lc : color;
-            AddLines(lines, l => MapColor(l.Color, layerColor), dashed);
+            AddLines(lines.Where(l => Shown(layer, l.Name)), l => MapColor(l.Color, layerColor), dashed);
         }
         // Layers that only exist in Network-ATC sectors always use their own colors.
         foreach (var layer in s.CustomLayers)
@@ -505,7 +518,7 @@ public sealed class RadarView : FrameworkElement
                 DrawSmallText(dc, l.Text, ToScreen(l.Position), own ? l.Color ?? s.LayerColors.GetValueOrDefault(l.Group, theme.Label) : MapColor(l.Color, theme.Label));
         }
         if (Profile.IsLayerVisible("FREETEXT"))
-            foreach (var l in s.FreeTexts) DrawSmallText(dc, l.Text, ToScreen(l.Position), theme.Label);
+            foreach (var l in s.FreeTexts.Where(FreeTextShown)) DrawSmallText(dc, l.Text, ToScreen(l.Position), theme.Label);
     }
 
     /// <summary>Extended centerlines of the active arrival runways, 15 NM with a tick every 5 NM.</summary>
@@ -658,7 +671,7 @@ public sealed class RadarView : FrameworkElement
             // Symbol: diamond for untracked, filled square for tracked, dot on the ground; on the ground, zoomed in,
             // the aircraft itself to scale, turned to its heading (ground radar).
             double s = Profile.Targets.SymbolSize / 2;
-            if (t.OnGround && Silhouette(t) is { } shape)
+            if (t.OnGround && Profile.EsDisplayType.Length == 0 && Silhouette(t) is { } shape)
             {
                 dc.DrawGeometry(Paint.Brush(Paint.WithAlpha(symbolColor, 170)), Paint.Pen(symbolColor, 1), shape.Geometry);
                 s = Math.Max(s, shape.Radius);

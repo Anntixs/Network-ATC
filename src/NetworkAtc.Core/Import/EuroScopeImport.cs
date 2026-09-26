@@ -466,7 +466,6 @@ public static class EuroScopeImport
         if (ReadFile(PluginFile(dir, "GRpluginMaps.txt", name, report, false), report) is { } mapText)
             parts.Add($"{TopSkyMaps.Parse(mapText, name, maps, new Dictionary<string, string>(), visibility).Maps} maps");
         if (parts.Count > 0) report.Ok($"{name}: {string.Join(", ", parts)}");
-        report.Skip($"{name}: the plugin itself does not run in Network-ATC, only its stands and maps were imported");
     }
 
     private static void ImportCcams(string? dir, Profile profile, ImportReport report)
