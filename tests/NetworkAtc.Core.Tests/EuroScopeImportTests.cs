@@ -236,7 +236,7 @@ public class EuroScopeImportTests
 
         Assert.NotSame(current, p);
         Assert.Equal("Default", current.Name);
-        Assert.Equal("SkyNetwork", current.Theme.Name);
+        Assert.Equal("Graphite", current.Theme.Name);
         Assert.Equal("", current.Station.Callsign);
 
         Assert.Equal("UUWV", p.Name);

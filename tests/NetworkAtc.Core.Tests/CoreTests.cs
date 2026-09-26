@@ -158,6 +158,15 @@ public class StcaTests
         Assert.Contains(conflicts, x => (x.A == a && x.B == c || x.A == c && x.B == a) && x.Predicted);
         Assert.DoesNotContain(conflicts, x => x.A == d || x.B == d);
     }
+
+    [Fact]
+    public void PairKey_IsTheSameWhicheverAircraftComesFirst()
+    {
+        var a = At("afl1", 56.0, 37.0, 10000, 90);
+        var b = At("SBI2", 56.0, 37.05, 10500, 270);
+        Assert.Equal("AFL1|SBI2", new Conflict(a, b, 1, 500, false).PairKey);
+        Assert.Equal("AFL1|SBI2", new Conflict(b, a, 1, 500, true).PairKey);
+    }
 }
 
 public class CommandTests
@@ -276,7 +285,7 @@ public class ProfileTests
     {
         var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
         var p = new Profile { Name = "Tower" };
-        p.Theme = Theme.BuiltIn.First(t => t.Name == "Scope Green").Clone();
+        p.Theme = Theme.BuiltIn.First(t => t.Name == "Polar Night").Clone();
         p.Tags.Tracked = "{callsign}";
         p.Layers["SID"] = true;
         p.Station.Facility = Facility.Tower;
@@ -284,7 +293,7 @@ public class ProfileTests
         var q = Profile.Load(path);
         File.Delete(path);
         Assert.Equal("Tower", q.Name);
-        Assert.Equal("Scope Green", q.Theme.Name);
+        Assert.Equal("Polar Night", q.Theme.Name);
         Assert.Equal("{callsign}", q.Tags.Tracked);
         Assert.True(q.IsLayerVisible("SID"));
         Assert.Equal(Facility.Tower, q.Station.Facility);
@@ -535,12 +544,37 @@ public class TrafficListTests
 public class ProfileMigrationTests
 {
     [Fact]
+    public void Version6Profile_WithTheOldDefaultLook_GetsGraphite_CustomColorsStay()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
+        string Old(string accent) => $$"""{ "Version": 6, "Theme": { "Name": "SkyNetwork", "Background": "#1C2126", "Panel": "#242A30", "RadarBackground": "#17232C", "Accent": "{{accent}}" } }""";
+        File.WriteAllText(path, Old("#3FA7D6"));
+        var p = Profile.Load(path);
+        Assert.Equal("Graphite", p.Theme.Name);
+        Assert.Equal(new Theme().RadarBackground, p.Theme.RadarBackground);
+
+        // Own colors on top of the old look: nothing is taken away.
+        File.WriteAllText(path, Old("#3FA7D6").Replace("\"#17232C\"", "\"#000000\""));
+        Assert.Equal("#000000", Profile.Load(path).Theme.RadarBackground);
+        File.Delete(path);
+    }
+
+    [Fact]
+    public void BuiltInThemes_AreTheDefaultGreyConsoleAndPolarNight_AndValid()
+    {
+        Assert.Equal(["Graphite", "Grey Console", "Polar Night"], Theme.BuiltIn.Select(t => t.Name).ToArray());
+        foreach (var t in Theme.BuiltIn)
+            foreach (var key in Theme.ColorKeys)
+                Assert.Matches("^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$", t.Get(key));
+    }
+
+    [Fact]
     public void OldProfile_GetsNewThemeAndWindows()
     {
         var path = Path.Combine(Path.GetTempPath(), $"natc-{Guid.NewGuid():N}.json");
         File.WriteAllText(path, """{ "Name": "Old", "Theme": { "Name": "Midnight", "Accent": "#123456" } }""");
         var p = Profile.Load(path);
-        Assert.Equal("SkyNetwork", p.Theme.Name);
+        Assert.Equal("Graphite", p.Theme.Name);
         Assert.Equal(Profile.CurrentVersion, p.Version);
         Assert.True(p.Windows["departures"].Visible);
 

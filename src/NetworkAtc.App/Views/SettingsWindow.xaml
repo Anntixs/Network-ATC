@@ -40,11 +40,10 @@
           <TextBlock Text="Every radar and interface color can be changed. The theme is saved in the profile and can be exported to JSON." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,4,0,0"/>
           <TextBlock Text="PROFILE" Style="{StaticResource SectionTitle}"/>
           <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="260" HorizontalAlignment="Left"/>
-          <TextBlock Text="PRESET THEMES" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="THEME" Style="{StaticResource SectionTitle}"/>
           <StackPanel Orientation="Horizontal">
-            <ComboBox x:Name="PresetBox" Width="200" DisplayMemberPath="Name"/>
-            <Button Content="Apply" Margin="8,0,0,0" Click="OnApplyPreset"/>
-            <Button Content="Import…" Click="OnImportTheme"/>
+            <ComboBox x:Name="PresetBox" Width="200" DisplayMemberPath="Name" ToolTip="Graphite (default), Grey Console or Polar Night: the colors below change at once, Save applies them"/>
+            <Button Content="Import…" Margin="8,0,0,0" Click="OnImportTheme"/>
             <Button Content="Export…" Click="OnExportTheme"/>
           </StackPanel>
           <CheckBox Content="Take map colors from the sector file (#define)" IsChecked="{Binding UseSectorFileColors}" Margin="0,12,0,0"/>

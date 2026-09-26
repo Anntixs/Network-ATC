@@ -91,7 +91,8 @@ public partial class MainWindow : Window
     private AtisWindow? _atisWindow;
     private string _atisLettersSeen = "";
     private bool _updatingPlan;
-    private int _lastConflictCount;
+    /// <summary>Pairs in conflict at the last check: the alert sounds for every new pair.</summary>
+    private HashSet<string> _conflictPairs = [];
     private bool _wasConnected;
     private readonly Stca _stca = new();
     private readonly DispatcherTimer _frame = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -346,8 +347,9 @@ public partial class MainWindow : Window
         {
             _dirty = false;
             Radar.Conflicts = _profile.StcaEnabled ? _stca.Check(_session.Tracks) : [];
-            if (Radar.Conflicts.Count > _lastConflictCount) _sounds.Play(SoundEvent.ConflictAlert);
-            _lastConflictCount = Radar.Conflicts.Count;
+            var pairs = Radar.Conflicts.Select(c => c.PairKey).ToHashSet();
+            if (!pairs.IsSubsetOf(_conflictPairs)) _sounds.Play(SoundEvent.ConflictAlert);
+            _conflictPairs = pairs;
             Radar.InvalidateVisual();
         }
         if (_frameCount % 4 == 0)
