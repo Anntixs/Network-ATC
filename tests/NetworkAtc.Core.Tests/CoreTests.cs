@@ -13,6 +13,17 @@ namespace NetworkAtc.Core.Tests;
 public class GeoTests
 {
     [Fact]
+    public void SupervisorPositionsLogInAsObservers()
+    {
+        Assert.Equal(Facility.Supervisor, AtcSession.FacilityFromCallsign("sky_sup"));
+        Assert.Equal(Facility.Administrator, AtcSession.FacilityFromCallsign("SKY_ADM"));
+        Assert.Equal((11, 12, 1), (Facility.Supervisor.MinimumRating(), Facility.Administrator.MinimumRating(), Facility.Centre.MinimumRating()));
+        Assert.Equal("%SKY_SUP:22800:0:600:11:55.000000:37.000000:0",
+            AtcPackets.Position("SKY_SUP", 122800, Facility.Supervisor, 600, 11, new GeoPoint(55, 37)));
+        Assert.StartsWith("%UUEE_TWR:18100:4:", AtcPackets.Position("UUEE_TWR", 118100, Facility.Tower, 50, 4, new GeoPoint(55, 37)));
+    }
+
+    [Fact]
     public void Projection_RoundTrips()
     {
         var p = new Projection(new GeoPoint(55.97, 37.41));

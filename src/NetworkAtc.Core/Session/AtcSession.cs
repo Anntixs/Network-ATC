@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using NetworkAtc.Core.Fsd;
@@ -40,6 +41,8 @@ public sealed partial class AtcSession : IAsyncDisposable
     public event EventHandler<AtcMessage>? MessageReceived;
     public event EventHandler? ControllersChanged;
     public event EventHandler<bool>? ConnectionChanged;
+    /// <summary>The server's answer to ".find" for a supervisor: where the callsign is, anywhere on the network.</summary>
+    public event EventHandler<(string Callsign, GeoPoint Position)>? ServerFound;
 
     public bool IsConnected => _fsd?.IsConnected == true;
     public string Callsign => _info?.Callsign ?? "";
@@ -63,6 +66,8 @@ public sealed partial class AtcSession : IAsyncDisposable
         var c when c.EndsWith("_APP") || c.EndsWith("_DEP") => Facility.Approach,
         var c when c.EndsWith("_CTR") => Facility.Centre,
         var c when c.EndsWith("_FSS") => Facility.FlightService,
+        var c when c.EndsWith("_SUP") => Facility.Supervisor,
+        var c when c.EndsWith("_ADM") => Facility.Administrator,
         _ => Facility.Observer,
     };
 
@@ -151,6 +156,21 @@ public sealed partial class AtcSession : IAsyncDisposable
         Raise(new AtcMessage(MessageChannel.Private, Callsign, text, _clock(), Peer: to, Outgoing: true));
     }
 
+    /// <summary>A supervisor command (".kill", ".find"...); the server answers with a message or an error.</summary>
+    public async Task SendStaffCommandAsync(string command, params string[] args)
+    {
+        var fsd = _fsd ?? throw new InvalidOperationException("Not connected to the network");
+        await fsd.SendAsync(AtcPackets.StaffCommand(Callsign, command, args)).ConfigureAwait(false);
+    }
+
+    /// <summary>A message to everyone on the network (supervisors and administrators).</summary>
+    public async Task SendBroadcastAsync(string text)
+    {
+        var fsd = _fsd ?? throw new InvalidOperationException("Not connected to the network");
+        await fsd.SendAsync(AtcPackets.TextMessage(Callsign, "*", text)).ConfigureAwait(false);
+        Raise(new AtcMessage(MessageChannel.Broadcast, Callsign, "[to all] " + text, _clock(), Outgoing: true));
+    }
+
     public Task RequestFlightPlanAsync(string callsign) =>
         _fsd?.SendAsync(AtcPackets.RequestFlightPlan(Callsign, callsign.ToUpperInvariant())) ?? Task.CompletedTask;
 
@@ -206,6 +226,16 @@ public sealed partial class AtcSession : IAsyncDisposable
                     _ = _fsd?.SendAsync($"$CR{Callsign}:{p[0]}:RN:{AtcPackets.Clean(_info.RealName)}::{_info.Rating}");
                 else if (IsToMe(p[1]) && p[2] == "ATC" && _info != null)
                     _ = _fsd?.SendAsync($"$CR{Callsign}:{p[0]}:ATC:Y:{Callsign}");
+                break;
+            case "$CR":
+                // $CRSERVER:<me>:FIND:<callsign>:<lat>:<lon>:<alt>
+                if (p[0] == "SERVER" && IsToMe(p[1]) && p[2] == "FIND" && p.Fields.Length >= 6 &&
+                    double.TryParse(p[4], NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) &&
+                    double.TryParse(p[5], NumberStyles.Float, CultureInfo.InvariantCulture, out var lon))
+                {
+                    ServerFound?.Invoke(this, (p[3], new GeoPoint(lat, lon)));
+                    Raise(new AtcMessage(MessageChannel.Server, "Server", $"{p[3]} found", _clock()));
+                }
                 break;
             case "$ER":
                 Raise(new AtcMessage(MessageChannel.Server, "Server", $"{p[4]} {p[3]}".Trim(), _clock(), IsError: true));

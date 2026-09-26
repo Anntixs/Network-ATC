@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using NetworkAtc.Core.Customization;
 using NetworkAtc.Core.Fsd;
+using NetworkAtc.Core.Plugins;
 using NetworkAtc.Core.Session;
 using NetworkAtc.Plugins;
 
@@ -124,6 +126,61 @@ public class FsdIntegrationTests
             await pilot.DisconnectAsync("#DPAFL1:1000001");
             await app.DisconnectAsync();
             await ctr.DisconnectAsync();
+        }
+        finally
+        {
+            fsd.Kill();
+            dir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task SupervisorFindsAndDisconnectsAPilot()
+    {
+        if (string.IsNullOrEmpty(Build)) return;
+        var dir = Directory.CreateTempSubdirectory("natc");
+        string db = Path.Combine(dir.FullName, "net.db");
+        Run("skynet-admin", $"--db {db} adduser 1000001 \"Pilot One\" pw1");
+        Run("skynet-admin", $"--db {db} adduser 1000002 \"Network Sup\" pw2 C1");
+        Run("skynet-admin", $"--db {db} staff 1000002 SUP");
+        int port = FreePort(), httpPort = FreePort();
+        using var fsd = Process.Start(new ProcessStartInfo(Path.Combine(Build, "skynet-fsd"),
+            $"--db {db} --host 127.0.0.1 --port {port} --http-port {httpPort}") { RedirectStandardError = true })!;
+        try
+        {
+            await Task.Delay(300);
+            var sup = new AtcSession();
+            var messages = new List<AtcMessage>();
+            sup.MessageReceived += (_, m) => { lock (messages) messages.Add(m); };
+            (string Callsign, GeoPoint Position)? found = null;
+            sup.ServerFound += (_, f) => found = f;
+            await sup.ConnectAsync(new AtcConnectInfo("127.0.0.1", port, 1000002, "pw2", "Network Sup", 11,
+                "SKY_SUP", 122800, Facility.Supervisor, 600, new GeoPoint(55.97, 37.41)));
+            var cmd = new CommandProcessor(sup, () => new Profile(), new PluginRegistry(), () => null);
+
+            // Far out of range: only the server knows where it is.
+            var pilot = new FsdClient();
+            var pilotLines = new List<string>();
+            string? pilotGone = null;
+            pilot.PacketReceived += (_, p) => { lock (pilotLines) pilotLines.Add(p.ToString()); };
+            pilot.Disconnected += (_, r) => pilotGone = r;
+            await pilot.ConnectAsync("127.0.0.1", port, "#APAFL9:SERVER:1000001:pw1:1:100:1:Pilot One");
+            await pilot.SendAsync("@N:AFL9:2000:1:43.440000:39.950000:3000:180:0:0");
+            await Task.Delay(300);
+
+            Assert.Contains("asking the server", await cmd.ExecuteAsync(".find afl9"));
+            await WaitFor(() => found != null);
+            Assert.Equal("AFL9", found!.Value.Callsign);
+            Assert.Equal(43.44, found.Value.Position.Latitude, 3);
+
+            Assert.Null(await cmd.ExecuteAsync(".whois AFL9"));
+            await WaitFor(() => { lock (messages) return messages.Any(m => m.Text.Contains("CID 1000001")); });
+
+            Assert.Null(await cmd.ExecuteAsync(".kill AFL9 ignoring ATC: repeatedly"));
+            await WaitFor(() => pilotGone != null);
+            lock (pilotLines) Assert.Contains(pilotLines, l => l.Contains("Reason: ignoring ATC  repeatedly"));
+            await WaitFor(() => { lock (messages) return messages.Any(m => m.Text.Contains("AFL9 (CID 1000001) disconnected")); });
+            await sup.DisconnectAsync();
         }
         finally
         {

@@ -159,15 +159,24 @@ public sealed class RadarView : FrameworkElement
     private GeoPoint ToGeo(Point s) =>
         _projection.FromPlane((s.X - ActualWidth / 2) * _nmPerPixel + _cx, (ActualHeight / 2 - s.Y) * _nmPerPixel + _cy);
 
-    private bool OnScreen(Point p, double margin = 50) =>
-        p.X > -margin && p.Y > -margin && p.X < ActualWidth + margin && p.Y < ActualHeight + margin;
+    private bool OnScreen(Point p, double margin = 50)
+    {
+        margin = Math.Max(margin, _cullMargin);
+        return p.X > -margin && p.Y > -margin && p.X < ActualWidth + margin && p.Y < ActualHeight + margin;
+    }
 
     // ---- rendering -------------------------------------------------------------------------------
 
     protected override void OnRender(DrawingContext dc)
     {
         var theme = Profile.Theme;
-        dc.DrawRectangle(Paint.Brush(theme.RadarBackground), null, new Rect(0, 0, ActualWidth, ActualHeight));
+        if (Map != null)
+        {
+            // The map lies underneath in its own layer; this element only needs to be hit-testable everywhere.
+            dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, ActualHeight));
+            Map.Background = Paint.Brush(theme.RadarBackground);
+        }
+        else dc.DrawRectangle(Paint.Brush(theme.RadarBackground), null, new Rect(0, 0, ActualWidth, ActualHeight));
         if (!string.Equals(_tagFontName, Profile.Tags.FontFamily, StringComparison.Ordinal))
         {
             _tagFontName = Profile.Tags.FontFamily;
@@ -176,6 +185,7 @@ public sealed class RadarView : FrameworkElement
         }
         var drawing = EsDrawing;
         var full = new Rect(0, 0, ActualWidth, ActualHeight);
+        if (Map != null) UpdateMap(theme);
         if (HideOwnContent)
         {
             _tagBounds.Clear();
@@ -185,8 +195,11 @@ public sealed class RadarView : FrameworkElement
             if (drawing?.Front is { } onlyFront) dc.DrawImage(onlyFront, full);
             return;
         }
-        if (Profile.IsLayerVisible("RANGE RINGS")) DrawRangeRings(dc, theme);
-        if (Sector != null) DrawSector(dc, Sector, theme);
+        if (Map == null)
+        {
+            if (Profile.IsLayerVisible("RANGE RINGS")) DrawRangeRings(dc, theme);
+            if (Sector != null) DrawSector(dc, Sector, theme);
+        }
         if (Sector != null && Profile.IsLayerVisible("CENTERLINES")) DrawCenterlines(dc, Sector, theme);
         if (drawing?.Back is { } back) dc.DrawImage(back, full);
         DrawOverlays(dc);
@@ -195,6 +208,92 @@ public sealed class RadarView : FrameworkElement
         if (drawing?.Front is { } front) dc.DrawImage(front, full);
         DrawMeasures(dc, theme);
         DrawScaleBar(dc, theme);
+    }
+
+    // ---- map layer ------------------------------------------------------------------------------
+
+    /// <summary>The layer the sector map is drawn into (under this element); null draws the map here, every frame.</summary>
+    public MapLayer? Map { get; set; }
+
+    /// <summary>How long the view must stay still before the moved map picture is redrawn crisply.</summary>
+    private static readonly TimeSpan MapSettle = TimeSpan.FromMilliseconds(140);
+    private readonly System.Windows.Threading.DispatcherTimer _mapSettleTimer = new() { Interval = MapSettle };
+    private (double Cx, double Cy, double NmPerPixel, double W, double H) _mapDrawnView, _lastView;
+    private DateTime _lastViewChange;
+    private string _mapContentKey = "";
+    /// <summary>While the map is drawn, things this far outside the screen are drawn too, so panning shows them.</summary>
+    private double _cullMargin;
+
+    private string MapContentKey(Theme theme)
+    {
+        var key = new System.Text.StringBuilder(Sector != null ? MapKey(Sector, theme) : "no sector");
+        foreach (var layer in new[] { "RANGE RINGS", "FIXES", "FIX NAMES", "VOR", "NDB", "AIRPORTS", "LABELS", "FREETEXT" })
+            key.Append(Profile.IsLayerVisible(layer) ? '1' : '0');
+        key.Append('|').Append(HideOwnContent).Append('|').Append(Profile.RangeRingCount).Append('|').Append(Profile.RangeRingSpacingNm)
+           .Append('|').Append(theme.RangeRings).Append(theme.Fix).Append(theme.Vor).Append(theme.Ndb).Append(theme.Airport).Append(theme.Label)
+           .Append('|').Append(VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        return key.ToString();
+    }
+
+    /// <summary>
+    /// Keeps the map layer in step with the view: while the view moves the last picture is only shifted and scaled
+    /// (cheap, on the graphics card); once it has been still for a moment, or the map itself changed, it is redrawn.
+    /// </summary>
+    private void UpdateMap(Theme theme)
+    {
+        var view = (_cx, _cy, _nmPerPixel, ActualWidth, ActualHeight);
+        var now = DateTime.UtcNow;
+        if (view != _lastView)
+        {
+            _lastView = view;
+            _lastViewChange = now;
+        }
+        string key = MapContentKey(theme);
+        bool sizeChanged = view.ActualWidth != _mapDrawnView.W || view.ActualHeight != _mapDrawnView.H;
+        if (key != _mapContentKey || sizeChanged || (view != _mapDrawnView && now - _lastViewChange >= MapSettle))
+        {
+            RenderMap(theme, key, view);
+            return;
+        }
+        if (view == _mapDrawnView) return;
+        // Drawn: screen = k0 * (x, -y) + b0; now: k1 * (x, -y) + b1. So now = s * drawn + (b1 - s * b0), s = k1 / k0.
+        double k0 = 1 / _mapDrawnView.NmPerPixel, k1 = 1 / _nmPerPixel, s = k1 / k0;
+        double b0x = _mapDrawnView.W / 2 - _mapDrawnView.Cx * k0, b0y = _mapDrawnView.H / 2 + _mapDrawnView.Cy * k0;
+        double b1x = ActualWidth / 2 - _cx * k1, b1y = ActualHeight / 2 + _cy * k1;
+        Map!.Follow(new Matrix(s, 0, 0, s, b1x - s * b0x, b1y - s * b0y));
+        if (!_mapSettleTimer.IsEnabled)
+        {
+            _mapSettleTimer.Tick -= OnMapSettle;
+            _mapSettleTimer.Tick += OnMapSettle;
+            _mapSettleTimer.Start();
+        }
+    }
+
+    private void OnMapSettle(object? sender, EventArgs e)
+    {
+        if (DateTime.UtcNow - _lastViewChange < MapSettle) return; // still moving: wait for the next tick
+        _mapSettleTimer.Stop();
+        InvalidateVisual();
+    }
+
+    private void RenderMap(Theme theme, string key, (double, double, double, double, double) view)
+    {
+        _mapSettleTimer.Stop();
+        using (var dc = Map!.Open())
+        {
+            if (!HideOwnContent)
+            {
+                _cullMargin = Math.Max(ActualWidth, ActualHeight) * 0.6;
+                try
+                {
+                    if (Profile.IsLayerVisible("RANGE RINGS")) DrawRangeRings(dc, theme);
+                    if (Sector != null) DrawSector(dc, Sector, theme);
+                }
+                finally { _cullMargin = 0; }
+            }
+        }
+        _mapContentKey = key;
+        _mapDrawnView = view;
     }
 
     private string MapColor(string? fileColor, string themeColor) =>
