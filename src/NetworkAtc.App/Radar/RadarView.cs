@@ -23,7 +23,8 @@ namespace NetworkAtc.App.Radar;
 public sealed class RadarView : FrameworkElement
 {
     private static readonly Typeface UiTypeface = new(AppFonts.Family(AppFonts.Ui), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-    private const double MinNmPerPixel = 0.002, MaxNmPerPixel = 5;
+    // Down to about 0.4 m per pixel: close enough to see aircraft to scale on the ground radar.
+    private const double MinNmPerPixel = 0.0002, MaxNmPerPixel = 5;
 
     private Projection _projection = new(new GeoPoint(55.97, 37.41));
     private double _cx, _cy;               // view center, plane NM
@@ -654,9 +655,15 @@ public sealed class RadarView : FrameworkElement
             if (Profile.Targets.PredictionMinutes > 0 && !t.OnGround && t.GroundSpeed > 30)
                 dc.DrawLine(Paint.Pen(theme.PredictionLine, 1), p, ToScreen(t.Predict(Profile.Targets.PredictionMinutes)));
 
-            // Symbol: diamond for untracked, filled square for tracked, dot on the ground.
+            // Symbol: diamond for untracked, filled square for tracked, dot on the ground; on the ground, zoomed in,
+            // the aircraft itself to scale, turned to its heading (ground radar).
             double s = Profile.Targets.SymbolSize / 2;
-            if (t.OnGround)
+            if (t.OnGround && Silhouette(t) is { } shape)
+            {
+                dc.DrawGeometry(Paint.Brush(Paint.WithAlpha(symbolColor, 170)), Paint.Pen(symbolColor, 1), shape.Geometry);
+                s = Math.Max(s, shape.Radius);
+            }
+            else if (t.OnGround)
             {
                 dc.DrawEllipse(Paint.Brush(symbolColor), null, p, s * 0.6, s * 0.6);
             }
@@ -689,6 +696,29 @@ public sealed class RadarView : FrameworkElement
 
             DrawTag(dc, t, p, theme, hovered, conflict, emergency, dip);
         }
+    }
+
+    /// <summary>The aircraft to scale when it is at least 8 pixels long, with the radius of the circle around it.</summary>
+    private (Geometry Geometry, double Radius)? Silhouette(Track t)
+    {
+        var (length, span) = AircraftShapes.Size(t.AircraftType, t.WakeCategory);
+        double pxPerMetre = 1 / (1852 * _nmPerPixel);
+        if (length * pxPerMetre < 8) return null;
+        var p = ToScreen(t.Position);
+        double h = t.Heading * Math.PI / 180;
+        // Forward along the heading (north is up), right perpendicular to it.
+        var forward = new Vector(Math.Sin(h), -Math.Cos(h)) * pxPerMetre;
+        var right = new Vector(Math.Cos(h), Math.Sin(h)) * pxPerMetre;
+        var outline = AircraftShapes.Outline(length, span);
+        var g = new StreamGeometry();
+        using (var ctx = g.Open())
+        {
+            ctx.BeginFigure(p + forward * outline[0].Forward + right * outline[0].Right, true, true);
+            for (int i = 1; i < outline.Count; i++)
+                ctx.LineTo(p + forward * outline[i].Forward + right * outline[i].Right, true, true);
+        }
+        g.Freeze();
+        return (g, Math.Max(length, span) / 2 * pxPerMetre);
     }
 
     private TrackState StateOf(Track t) =>

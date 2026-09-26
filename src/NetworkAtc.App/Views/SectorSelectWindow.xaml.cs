@@ -33,6 +33,9 @@ public partial class SectorSelectWindow : Window
     /// <summary>The chosen sector file, or null when the window was cancelled.</summary>
     public string? SelectedPath { get; private set; }
 
+    /// <summary>The sector is opened as a ground sector: the ground radar view of its airport.</summary>
+    public bool OpenAsGround { get; private set; }
+
     public static string DemoPath => Path.Combine(AppContext.BaseDirectory, "demo", "UUEE-demo.natc");
 
     private void RefreshRecent()
@@ -81,6 +84,14 @@ public partial class SectorSelectWindow : Window
     private void OnOpenEuroScope(object sender, RoutedEventArgs e)
     {
         if (Browse("EuroScope sector", "EuroScope sector (*.sct;*.sct2)|*.sct;*.sct2|All files|*.*") is { } path) Choose(path);
+    }
+
+    private void OnOpenGround(object sender, RoutedEventArgs e)
+    {
+        if (Browse("Ground sector", "Sector (*.sct;*.sct2;*.natc)|*.sct;*.sct2;*.natc|All files|*.*") is not { } path) return;
+        OpenAsGround = true;
+        Choose(path);
+        if (DialogResult != true) OpenAsGround = false;
     }
 
     private void OnDemo(object sender, RoutedEventArgs e) => Choose(DemoPath);

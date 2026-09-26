@@ -345,6 +345,8 @@ public sealed class Profile
     public Dictionary<string, string> KeyBindings { get; set; } = new(DefaultKeyBindings, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Last map view.</summary>
+    /// <summary>Airport of the ground radar view (aircraft to scale, GRP style); empty — the normal radar.</summary>
+    public string GroundAirport { get; set; } = "";
     public double ViewCenterLatitude { get; set; }
     public double ViewCenterLongitude { get; set; }
     public double ViewNmPerPixel { get; set; } = 0.15;

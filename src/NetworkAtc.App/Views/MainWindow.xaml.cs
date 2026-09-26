@@ -11,6 +11,7 @@ using NetworkAtc.App.Services;
 using NetworkAtc.Core.Customization;
 using NetworkAtc.Core.EsPlugins;
 using NetworkAtc.Core.Fsd;
+using NetworkAtc.Core.Geo;
 using NetworkAtc.Core.Plugins;
 using NetworkAtc.Core.Radar;
 using NetworkAtc.Core.Sectors;
@@ -1286,6 +1287,12 @@ public partial class MainWindow : Window
         var menu = new ContextMenu { PlacementTarget = FileButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
         menu.Items.Add(MenuEntry("Open sector…", () => OnOpenSectorClick(this, new RoutedEventArgs()), "Ctrl+O"));
         menu.Items.Add(MenuEntry("Import EuroScope profile (.prf)…", ImportEuroScopeProfile));
+        var ground = new MenuItem { Header = _profile.GroundAirport.Length > 0 ? $"Ground radar (GRP) · {_profile.GroundAirport}" : "Ground radar (GRP)" };
+        if (_profile.GroundAirport.Length > 0) ground.Items.Add(MenuEntry("Back to the radar view", LeaveGroundRadar));
+        foreach (var a in SectorAirports().Take(12))
+            ground.Items.Add(MenuEntry(a.Name.ToUpperInvariant(), () => { EnterGroundRadar(a.Name); SaveProfile(); }));
+        if (ground.Items.Count == 0) ground.Items.Add(new MenuItem { Header = "No airports in this sector", IsEnabled = false });
+        menu.Items.Add(ground);
         var recent = _profile.RecentSectors.Where(r => File.Exists(r.Path)).Take(8).ToList();
         if (recent.Count > 0)
         {
@@ -1440,7 +1447,54 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true || dialog.SelectedPath == null) return;
         _profile.ViewCenterLatitude = 0;
         LoadSector(dialog.SelectedPath);
+        if (dialog.OpenAsGround) EnterGroundRadar(null);
+        else _profile.GroundAirport = "";
         SaveProfile();
+    }
+
+    // ---- ground radar ---------------------------------------------------------------------------
+
+    /// <summary>The radar view before the ground radar was opened, to come back to.</summary>
+    private (GeoPoint Center, double NmPerPixel)? _beforeGround;
+
+    /// <summary>Airports of the sector, nearest to the view first.</summary>
+    private List<NamedPoint> SectorAirports()
+    {
+        var center = Radar.ViewCenter;
+        return Radar.Sector?.Airports.Where(a => a.Name.Length == 4)
+                   .OrderBy(a => GeoMath.DistanceNm(center, a.Position)).ToList() ?? [];
+    }
+
+    /// <summary>
+    /// Ground radar (as the GRP plugin of EuroScope): the view on an airport, about 2.5 NM across, where the
+    /// aircraft on the ground are drawn to scale by type and turned to their heading.
+    /// </summary>
+    private void EnterGroundRadar(string? airport)
+    {
+        var airports = SectorAirports();
+        var wanted = airport ?? _profile.ActiveAirports.FirstOrDefault(a => airports.Any(x => x.Name.Equals(a, StringComparison.OrdinalIgnoreCase)))
+                     ?? Radar.Sector?.DefaultAirport;
+        var apt = airports.FirstOrDefault(a => a.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase)) ?? airports.FirstOrDefault();
+        if (apt == null)
+        {
+            Error("The sector has no airports for the ground radar");
+            return;
+        }
+        if (_profile.GroundAirport.Length == 0) _beforeGround = (Radar.ViewCenter, Radar.NmPerPixel);
+        _profile.GroundAirport = apt.Name.ToUpperInvariant();
+        double pixels = Math.Max(300, Math.Min(Radar.ActualWidth, Radar.ActualHeight));
+        Radar.SetView(apt.Position, 2.5 / pixels);
+        Info($"Ground radar: {_profile.GroundAirport}");
+        _dirty = true;
+    }
+
+    private void LeaveGroundRadar()
+    {
+        _profile.GroundAirport = "";
+        var (center, nmPerPixel) = _beforeGround ?? (Radar.Sector?.Center ?? Radar.ViewCenter, 0.15);
+        Radar.SetView(center, nmPerPixel);
+        _beforeGround = null;
+        _dirty = true;
     }
 
     private void OnRunwaysClick(object sender, RoutedEventArgs e)
