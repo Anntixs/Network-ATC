@@ -160,6 +160,12 @@ public partial class MainWindow : Window
         _registry.Changed += (_, _) => Dispatcher.BeginInvoke(BuildLayerList);
         _commands.CenterRequested += (_, p) => Radar.CenterOn(p);
         _commands.SelectRequested += (_, t) => Radar.Select(t);
+        // A supervisor's ".find" answered by the server: the callsign may be out of range.
+        _session.ServerFound += (_, f) => Dispatcher.BeginInvoke(() =>
+        {
+            Radar.CenterOn(f.Position);
+            if (_session.Find(f.Callsign) is { } t) Radar.Select(t);
+        });
         _commands.Changed += (_, _) => { _dirty = true; Dispatcher.BeginInvoke(RefreshWeather); };
         _session.Coordination += (_, e) => Dispatcher.BeginInvoke(() => OnCoordination(e));
         _workspace.Weather.Updated += (_, _) => Dispatcher.BeginInvoke(RefreshWeather);

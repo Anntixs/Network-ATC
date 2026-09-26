@@ -46,6 +46,10 @@ public static class AtcPackets
 
     public static string RequestFlightPlan(string from, string callsign) => $"$CQ{from}:SERVER:FP:{callsign}";
 
+    /// <summary>A supervisor command to the server: KILL, WARN, FIND, WHOIS, STAFF, ONLINE.</summary>
+    public static string StaffCommand(string from, string command, params string[] args) =>
+        $"$CQ{from}:SERVER:{command}" + string.Concat(args.Select(a => ":" + Clean(a)));
+
     public static string PlaneInfoRequest(string from, string to) => $"#SB{from}:{to}:PIR";
 
     public static PilotReport? ParsePilot(FsdPacket p)

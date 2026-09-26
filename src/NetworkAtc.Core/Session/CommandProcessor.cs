@@ -54,7 +54,7 @@ public sealed partial class CommandProcessor(AtcSession session, Func<Profile> p
         (".route", "show / hide the route of the selected aircraft"),
         (".halo [3]", "ring of N NM radius around the aircraft (0 removes it)"),
         (".sep AFL1 SBI2", "distance, bearing and closest approach of two aircraft"),
-        (".find AFL123", "find and select an aircraft"),
+        (".find AFL123", "find and select an aircraft (supervisors: anyone on the network)"),
         (".fp [AFL123]", "request the flight plan from the server"),
         (".msg CALLSIGN text", "private message"),
         (".contactme", "ask the selected aircraft to contact you on your frequency"),
@@ -66,6 +66,12 @@ public sealed partial class CommandProcessor(AtcSession session, Func<Profile> p
         (".range 150", "visibility range, NM"),
         (".airport UUEE UUDD", "active airports for the departure and arrival lists (no codes: show them)"),
         (".plugins", "plugins and their commands"),
+        (".kill CALLSIGN reason", "supervisors: disconnect a member from the network"),
+        (".warn CALLSIGN text", "supervisors: official warning from the server"),
+        (".whois CALLSIGN | CID", "supervisors: who is it (name, CID, rating, online since...)"),
+        (".staff", "supervisors: supervisors and administrators online"),
+        (".online", "supervisors: pilots and controllers online"),
+        (".broadcast text", "supervisors: message to everyone on the network"),
         (".demo", "demo traffic without a server (again to turn it off)"),
         (".help", "this help"),
     ];
@@ -242,11 +248,46 @@ public sealed partial class CommandProcessor(AtcSession session, Func<Profile> p
             {
                 if (args.Count == 0) return "Example: .find AFL123";
                 var t = session.Find(args[0]);
-                if (t == null) return $"{args[0].ToUpperInvariant()} not found";
+                if (t == null)
+                {
+                    // Out of range: a supervisor gets the position from the server (ServerFound).
+                    if (!session.IsConnected) return $"{args[0].ToUpperInvariant()} not found";
+                    await session.SendStaffCommandAsync("FIND", args[0].ToUpperInvariant()).ConfigureAwait(false);
+                    return $"{args[0].ToUpperInvariant()} is not in range, asking the server";
+                }
                 CenterRequested?.Invoke(this, t.Position);
                 SelectRequested?.Invoke(this, t);
                 return null;
             }
+            case "kill":
+            case "warn":
+            {
+                if (args.Count < 2) return cmd == "kill" ? "Example: .kill AFL123 ignoring ATC instructions" : "Example: .warn AFL123 follow ATC instructions";
+                if (!session.IsConnected) return "Not connected to the network";
+                await session.SendStaffCommandAsync(cmd.ToUpperInvariant(), args[0].ToUpperInvariant(), rest[(rest.IndexOf(' ') + 1)..])
+                    .ConfigureAwait(false);
+                return null;
+            }
+            case "whois":
+            case "who":
+            {
+                string target = args.Count > 0 ? args[0].ToUpperInvariant() : selected()?.Callsign ?? "";
+                if (target.Length == 0) return "Example: .whois AFL123 or .whois 1000001";
+                if (!session.IsConnected) return "Not connected to the network";
+                await session.SendStaffCommandAsync("WHOIS", target).ConfigureAwait(false);
+                return null;
+            }
+            case "staff":
+            case "online":
+                if (!session.IsConnected) return "Not connected to the network";
+                await session.SendStaffCommandAsync(cmd.ToUpperInvariant()).ConfigureAwait(false);
+                return null;
+            case "broadcast":
+            case "all":
+                if (rest.Length == 0) return "Example: .broadcast Server restart in 10 minutes";
+                if (!session.IsConnected) return "Not connected to the network";
+                await session.SendBroadcastAsync(rest).ConfigureAwait(false);
+                return null;
             case "fp":
             {
                 string cs = args.Count > 0 ? args[0] : selected()?.Callsign ?? "";
